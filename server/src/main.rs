@@ -1,18 +1,9 @@
 use std::{env, net::SocketAddr, path::PathBuf};
 
-use axum::{
-    Json, Router,
-    routing::{get, post},
-};
-use serde::Serialize;
+use axum::Router;
+use mail_shell_server::{db, routes, storage};
 use tower_http::{services::ServeDir, trace::TraceLayer};
 use tracing::info;
-
-#[derive(Serialize)]
-struct HealthResponse {
-    status: &'static str,
-    classification_model: &'static str,
-}
 
 #[tokio::main]
 async fn main() {
@@ -21,6 +12,7 @@ async fn main() {
             env::var("RUST_LOG")
                 .unwrap_or_else(|_| "mail_shell_server=info,tower_http=info".into()),
         )
+        .with_target(true)
         .init();
 
     let host = env::var("MAIL_SHELL_HOST").unwrap_or_else(|_| "127.0.0.1".into());
@@ -32,33 +24,60 @@ async fn main() {
         .parse()
         .expect("MAIL_SHELL_HOST and MAIL_SHELL_PORT must form a valid socket address");
 
+    let data_dir = PathBuf::from(
+        env::var("MAIL_SHELL_DATA_DIR").unwrap_or_else(|_| "data".into()),
+    );
+    storage::ensure_dirs(&data_dir).expect("failed to create data directories");
+
+    let pool = db::init_pool(&data_dir)
+        .await
+        .expect("failed to initialize database");
+
+    let state = routes::AppState {
+        pool: pool.clone(),
+        data_dir: data_dir.clone(),
+    };
+
     let assets_dir = PathBuf::from("client/dist");
     let app = Router::new()
-        .route("/api/healthz", get(healthz))
-        .route("/api/inbound", post(inbound_placeholder))
-        .nest_service(
-            "/",
+        .merge(routes::router(state))
+        .fallback_service(
             ServeDir::new(assets_dir).append_index_html_on_directories(true),
         )
         .layer(TraceLayer::new_for_http());
 
-    info!(listen_addr = %addr, "mail-shell server scaffold listening");
+    info!(listen_addr = %addr, "mail-shell server listening");
 
     let listener = tokio::net::TcpListener::bind(addr)
         .await
         .expect("failed to bind listener");
     axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
         .await
         .expect("server exited unexpectedly");
 }
 
-async fn healthz() -> Json<HealthResponse> {
-    Json(HealthResponse {
-        status: "ok",
-        classification_model: "system-tags:recipient_address,recipient_domain",
-    })
-}
+#[tracing::instrument]
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
 
-async fn inbound_placeholder() -> &'static str {
-    "inbound scaffold ready"
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => info!("received Ctrl+C, starting graceful shutdown"),
+        _ = terminate => info!("received SIGTERM, starting graceful shutdown"),
+    }
 }
