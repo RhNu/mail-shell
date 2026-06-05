@@ -1,9 +1,11 @@
 use axum::{
+    Json,
     http::StatusCode,
     response::{IntoResponse, Response},
-    Json,
 };
 use serde_json::json;
+
+use crate::{repository::RepositoryError, services::inbound::InboundServiceError};
 
 /// Central application error type.
 ///
@@ -11,12 +13,14 @@ use serde_json::json;
 /// by an Axum handler is automatically converted into an HTTP response.
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
-    #[error("database error: {0}")]
-    Db(#[from] sqlx::Error),
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
     #[error("mail parse error: {0}")]
     MailParse(#[from] mailparse::MailParseError),
+    #[error(transparent)]
+    Repo(#[from] RepositoryError),
+    #[error(transparent)]
+    InboundService(#[from] InboundServiceError),
     #[error("bad request: {0}")]
     BadRequest(String),
     #[error("not found")]
@@ -26,8 +30,12 @@ pub enum AppError {
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let (status, message) = match &self {
-            AppError::Db(err) => {
-                tracing::error!(error = %err, "database error");
+            AppError::Repo(err) => {
+                tracing::error!(error = %err, "repository error");
+                (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
+            }
+            AppError::InboundService(err) => {
+                tracing::error!(error = %err, "inbound service error");
                 (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
             }
             AppError::Io(err) => {

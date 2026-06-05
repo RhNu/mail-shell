@@ -1,8 +1,9 @@
 use std::{env, net::SocketAddr, path::PathBuf, sync::Arc};
 
 use axum::Router;
-use mail_shell_server::{routes, storage};
 use mail_shell_server::repository::sqlx::SqlxRepository;
+use mail_shell_server::services::inbound::InboundMessageService;
+use mail_shell_server::{routes, storage};
 use tower_http::{services::ServeDir, trace::TraceLayer};
 use tracing::info;
 
@@ -25,26 +26,25 @@ async fn main() {
         .parse()
         .expect("MAIL_SHELL_HOST and MAIL_SHELL_PORT must form a valid socket address");
 
-    let data_dir = PathBuf::from(
-        env::var("MAIL_SHELL_DATA_DIR").unwrap_or_else(|_| "data".into()),
-    );
+    let data_dir = PathBuf::from(env::var("MAIL_SHELL_DATA_DIR").unwrap_or_else(|_| "data".into()));
     storage::ensure_dirs(&data_dir).expect("failed to create data directories");
 
-    let repo = SqlxRepository::init_pool(&data_dir)
-        .await
-        .expect("failed to initialize database");
+    let repo = Arc::new(
+        SqlxRepository::init_pool(&data_dir)
+            .await
+            .expect("failed to initialize database"),
+    );
+    let inbound_service = Arc::new(InboundMessageService::new(repo.clone(), data_dir.clone()));
 
     let state = routes::AppState {
-        repo: Arc::new(repo),
-        data_dir: data_dir.clone(),
+        repo,
+        inbound_service,
     };
 
     let assets_dir = PathBuf::from("client/dist");
     let app = Router::new()
         .merge(routes::router(state))
-        .fallback_service(
-            ServeDir::new(assets_dir).append_index_html_on_directories(true),
-        )
+        .fallback_service(ServeDir::new(assets_dir).append_index_html_on_directories(true))
         .layer(TraceLayer::new_for_http());
 
     info!(listen_addr = %addr, "mail-shell server listening");

@@ -4,7 +4,8 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
 use mail_shell_server::repository::sqlx::SqlxRepository;
-use mail_shell_server::routes::{router, AppState};
+use mail_shell_server::routes::{AppState, router};
+use mail_shell_server::services::inbound::InboundMessageService;
 use mail_shell_server::storage;
 use std::path::PathBuf;
 use tower::ServiceExt;
@@ -26,10 +27,10 @@ async fn setup() -> (AppState, PathBuf) {
     let tmp = tempfile::tempdir().unwrap();
     let data_dir = tmp.path().to_path_buf();
     storage::ensure_dirs(&data_dir).unwrap();
-    let repo = SqlxRepository::init_pool(&data_dir).await.unwrap();
+    let repo = Arc::new(SqlxRepository::init_pool(&data_dir).await.unwrap());
     let state = AppState {
-        repo: Arc::new(repo),
-        data_dir: data_dir.clone(),
+        inbound_service: Arc::new(InboundMessageService::new(repo.clone(), data_dir.clone())),
+        repo,
     };
     (state, data_dir)
 }
@@ -65,7 +66,10 @@ async fn test_full_inbound_and_read_roundtrip() {
     let req = Request::builder()
         .method("POST")
         .uri("/api/inbound")
-        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header(
+            "Content-Type",
+            format!("multipart/form-data; boundary={boundary}"),
+        )
         .body(Body::from(body))
         .unwrap();
 
@@ -108,7 +112,8 @@ async fn test_full_inbound_and_read_roundtrip() {
     assert_eq!(res.status(), StatusCode::OK);
     let body_bytes = res.into_body().collect().await.unwrap().to_bytes();
     let tags: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
-    let recipient_tag = tags.as_array()
+    let recipient_tag = tags
+        .as_array()
         .unwrap()
         .iter()
         .find(|t| t["kind"] == "recipient_address")

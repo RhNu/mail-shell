@@ -109,7 +109,9 @@ fn extract_param(header: &str, param: &str) -> Option<String> {
     let search2 = format!("{param}=");
     if let Some(start) = lower.find(&search2) {
         let rest = &header[start + search2.len()..];
-        let end = rest.find(|c: char| c == ';' || c.is_whitespace()).unwrap_or(rest.len());
+        let end = rest
+            .find(|c: char| c == ';' || c.is_whitespace())
+            .unwrap_or(rest.len());
         return Some(rest[..end].trim_matches('"').to_string());
     }
     None
@@ -133,7 +135,10 @@ mod tests {
         let raw = b"From: sender@example.com\r\nTo: recipient@example.com\r\nSubject: Hello\r\nContent-Type: multipart/alternative; boundary=\"boundary123\"\r\n\r\n--boundary123\r\nContent-Type: text/plain\r\n\r\nPlain text\r\n--boundary123\r\nContent-Type: text/html\r\n\r\n<html><body>HTML</body></html>\r\n--boundary123--";
         let parsed = parse_message(raw).unwrap();
         assert_eq!(parsed.body_text, Some("Plain text".to_string()));
-        assert_eq!(parsed.body_html, Some("<html><body>HTML</body></html>".to_string()));
+        assert_eq!(
+            parsed.body_html,
+            Some("<html><body>HTML</body></html>".to_string())
+        );
         assert!(parsed.attachments.is_empty());
     }
 

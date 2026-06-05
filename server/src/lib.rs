@@ -8,4 +8,5 @@ pub mod mime_parser;
 pub mod models;
 pub mod repository;
 pub mod routes;
+pub mod services;
 pub mod storage;

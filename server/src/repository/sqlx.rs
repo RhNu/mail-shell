@@ -1,15 +1,18 @@
 use async_trait::async_trait;
-use sqlx::{SqlitePool, sqlite::SqliteConnectOptions};
+use sqlx::{
+    SqlitePool,
+    sqlite::{SqliteConnectOptions, SqlitePoolOptions},
+};
 use std::path::Path;
 
-use crate::error::AppError;
 use crate::models::{AttachmentDownloadMeta, AttachmentMeta, MessageDetail, MessageSummary, Tag};
-use crate::repository::Repository;
+use crate::repository::{
+    InboundMessageRecord, ListMessagesQuery, MessagePage, MessageRecord, Repository,
+    RepositoryError,
+};
 
-/// SQL script that creates the initial database schema.
-const MIGRATE_SQL: &str = include_str!("../sql/migrate.sql");
+static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
 
-/// Filename for the SQLite database file within the data directory.
 const DB_FILENAME: &str = "index.sqlite";
 
 #[derive(Debug, Clone)]
@@ -22,122 +25,184 @@ impl SqlxRepository {
         Self { pool }
     }
 
-    /// Initialize an on-disk SQLite connection pool, run migrations, and seed tags.
     #[tracing::instrument]
     pub async fn init_pool(data_dir: &Path) -> Result<Self, sqlx::Error> {
         let db_path = data_dir.join(DB_FILENAME);
-        tracing::info!(db_path = %db_path.display(), "connecting to database");
-
         let options = SqliteConnectOptions::new()
             .filename(&db_path)
             .create_if_missing(true);
-        let pool = SqlitePool::connect_with(options).await?;
+        let pool = SqlitePoolOptions::new().connect_with(options).await?;
         Self::migrate(&pool).await?;
-        Self::seed_tags(&pool).await?;
-        tracing::info!("database initialized");
         Ok(Self::new(pool))
     }
 
-    /// Initialize an in-memory SQLite pool for tests.
     #[tracing::instrument]
     pub async fn init_pool_in_memory() -> Result<Self, sqlx::Error> {
-        let pool = SqlitePool::connect("sqlite::memory:").await?;
+        let options = SqliteConnectOptions::new()
+            .in_memory(true)
+            .shared_cache(true);
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(options)
+            .await?;
         Self::migrate(&pool).await?;
-        Self::seed_tags(&pool).await?;
         Ok(Self::new(pool))
     }
 
-    /// Run the schema migration (CREATE TABLE IF NOT EXISTS).
     #[tracing::instrument(skip(pool))]
     async fn migrate(pool: &SqlitePool) -> Result<(), sqlx::Error> {
-        sqlx::query(MIGRATE_SQL).execute(pool).await?;
-        tracing::debug!("migration executed");
-        Ok(())
-    }
-
-    /// No static seeding required — tags are created on-demand.
-    async fn seed_tags(_pool: &SqlitePool) -> Result<(), sqlx::Error> {
+        MIGRATOR.run(pool).await?;
         Ok(())
     }
 }
 
 #[async_trait]
 impl Repository for SqlxRepository {
-    #[tracing::instrument(skip(self))]
-    async fn count_messages(&self, tag_id: Option<i64>) -> Result<i64, AppError> {
-        let total = if let Some(tag_id) = tag_id {
-            sqlx::query_scalar("SELECT COUNT(*) FROM message_tags WHERE tag_id = ?1")
+    #[tracing::instrument(skip(self, record), fields(message_id = %record.id))]
+    async fn ingest_message(&self, record: InboundMessageRecord) -> Result<(), RepositoryError> {
+        let mut tx = self.pool.begin().await?;
+
+        sqlx::query(
+            "INSERT INTO messages (id, from_address, to_address, subject, date, message_id, raw_path, body_text, body_html)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        )
+        .bind(&record.id)
+        .bind(&record.from_address)
+        .bind(&record.to_address)
+        .bind(&record.subject)
+        .bind(&record.date)
+        .bind(&record.message_id)
+        .bind(&record.raw_path)
+        .bind(&record.body_text)
+        .bind(&record.body_html)
+        .execute(&mut *tx)
+        .await?;
+
+        for attachment in &record.attachments {
+            sqlx::query(
+                "INSERT INTO attachments (id, message_id, filename, content_type, size, path)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            )
+            .bind(&attachment.id)
+            .bind(&record.id)
+            .bind(&attachment.filename)
+            .bind(&attachment.content_type)
+            .bind(attachment.size)
+            .bind(&attachment.path)
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        for tag in &record.tags {
+            let tag_id: i64 = sqlx::query_scalar(
+                "INSERT INTO tags (kind, value, label, source)
+                 VALUES (?1, ?2, ?3, ?4)
+                 ON CONFLICT(kind, value) DO UPDATE SET
+                     label = excluded.label,
+                     source = excluded.source
+                 RETURNING id",
+            )
+            .bind(&tag.kind)
+            .bind(&tag.value)
+            .bind(&tag.label)
+            .bind(&tag.source)
+            .fetch_one(&mut *tx)
+            .await?;
+
+            sqlx::query("INSERT OR IGNORE INTO message_tags (message_id, tag_id) VALUES (?1, ?2)")
+                .bind(&record.id)
                 .bind(tag_id)
-                .fetch_one(&self.pool)
-                .await?
-        } else {
-            sqlx::query_scalar("SELECT COUNT(*) FROM messages")
-                .fetch_one(&self.pool)
-                .await?
-        };
-        Ok(total)
+                .execute(&mut *tx)
+                .await?;
+        }
+
+        tx.commit().await?;
+        Ok(())
     }
 
     #[tracing::instrument(skip(self))]
     async fn list_messages(
         &self,
-        tag_id: Option<i64>,
-        limit: i64,
-        offset: i64,
-    ) -> Result<Vec<MessageSummary>, AppError> {
-        let items = if let Some(tag_id) = tag_id {
+        query: ListMessagesQuery,
+    ) -> Result<MessagePage<MessageSummary>, RepositoryError> {
+        let total = if let Some(tag_id) = query.tag_id {
+            sqlx::query_scalar(
+                "SELECT COUNT(*)
+                 FROM messages m
+                 JOIN message_tags mt ON mt.message_id = m.id
+                 WHERE mt.tag_id = ?1",
+            )
+            .bind(tag_id)
+            .fetch_one(&self.pool)
+            .await?
+        } else {
+            sqlx::query_scalar("SELECT COUNT(*) FROM messages")
+                .fetch_one(&self.pool)
+                .await?
+        };
+
+        let items = if let Some(tag_id) = query.tag_id {
             sqlx::query_as::<_, MessageSummary>(
-                "SELECT m.* FROM messages m
+                "SELECT m.*
+                 FROM messages m
                  JOIN message_tags mt ON mt.message_id = m.id
                  WHERE mt.tag_id = ?1
-                 ORDER BY m.created_at DESC
+                 ORDER BY m.created_at DESC, m.id DESC
                  LIMIT ?2 OFFSET ?3",
             )
             .bind(tag_id)
-            .bind(limit)
-            .bind(offset)
+            .bind(query.limit)
+            .bind(query.offset)
             .fetch_all(&self.pool)
             .await?
         } else {
             sqlx::query_as::<_, MessageSummary>(
-                "SELECT * FROM messages ORDER BY created_at DESC LIMIT ?1 OFFSET ?2",
+                "SELECT *
+                 FROM messages
+                 ORDER BY created_at DESC, id DESC
+                 LIMIT ?1 OFFSET ?2",
             )
-            .bind(limit)
-            .bind(offset)
+            .bind(query.limit)
+            .bind(query.offset)
             .fetch_all(&self.pool)
             .await?
         };
-        Ok(items)
+
+        Ok(MessagePage { items, total })
     }
 
     #[tracing::instrument(skip(self))]
-    async fn get_message_detail(&self, id: &str) -> Result<Option<MessageDetail>, AppError> {
+    async fn get_message(&self, id: &str) -> Result<Option<MessageRecord>, RepositoryError> {
         let message = sqlx::query_as::<_, MessageDetail>("SELECT * FROM messages WHERE id = ?1")
             .bind(id)
             .fetch_optional(&self.pool)
             .await?;
-        Ok(message)
-    }
 
-    #[tracing::instrument(skip(self))]
-    async fn list_attachments_by_message(
-        &self,
-        message_id: &str,
-    ) -> Result<Vec<AttachmentMeta>, AppError> {
+        let Some(message) = message else {
+            return Ok(None);
+        };
+
         let attachments = sqlx::query_as::<_, AttachmentMeta>(
-            "SELECT id, message_id, filename, content_type, size FROM attachments WHERE message_id = ?1",
+            "SELECT id, message_id, filename, content_type, size
+             FROM attachments
+             WHERE message_id = ?1
+             ORDER BY id",
         )
-        .bind(message_id)
+        .bind(id)
         .fetch_all(&self.pool)
         .await?;
-        Ok(attachments)
+
+        Ok(Some(MessageRecord {
+            message,
+            attachments,
+        }))
     }
 
     #[tracing::instrument(skip(self))]
-    async fn get_attachment_meta(
+    async fn get_attachment_download(
         &self,
         id: &str,
-    ) -> Result<Option<AttachmentDownloadMeta>, AppError> {
+    ) -> Result<Option<AttachmentDownloadMeta>, RepositoryError> {
         let row = sqlx::query_as::<_, AttachmentDownloadMeta>(
             "SELECT path, filename, content_type FROM attachments WHERE id = ?1",
         )
@@ -148,102 +213,7 @@ impl Repository for SqlxRepository {
     }
 
     #[tracing::instrument(skip(self))]
-    #[allow(clippy::too_many_arguments)]
-    async fn create_message(
-        &self,
-        id: &str,
-        from_address: &str,
-        to_address: &str,
-        subject: Option<&str>,
-        date: Option<&str>,
-        message_id: Option<&str>,
-        raw_path: &str,
-        body_text: Option<&str>,
-        body_html: Option<&str>,
-    ) -> Result<(), AppError> {
-        sqlx::query(
-            "INSERT INTO messages (id, from_address, to_address, subject, date, message_id, raw_path, body_text, body_html)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-        )
-        .bind(id)
-        .bind(from_address)
-        .bind(to_address)
-        .bind(subject)
-        .bind(date)
-        .bind(message_id)
-        .bind(raw_path)
-        .bind(body_text)
-        .bind(body_html)
-        .execute(&self.pool)
-        .await?;
-        Ok(())
-    }
-
-    #[tracing::instrument(skip(self))]
-    async fn create_attachment(
-        &self,
-        id: &str,
-        message_id: &str,
-        filename: Option<&str>,
-        content_type: Option<&str>,
-        size: i64,
-        path: &str,
-    ) -> Result<(), AppError> {
-        sqlx::query(
-            "INSERT INTO attachments (id, message_id, filename, content_type, size, path)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        )
-        .bind(id)
-        .bind(message_id)
-        .bind(filename)
-        .bind(content_type)
-        .bind(size)
-        .bind(path)
-        .execute(&self.pool)
-        .await?;
-        Ok(())
-    }
-
-    #[tracing::instrument(skip(self))]
-    async fn ensure_tag(&self, kind: &str, value: &str, label: &str) -> Result<i64, AppError> {
-        let id: Option<i64> =
-            sqlx::query_scalar("SELECT id FROM tags WHERE kind = ?1 AND value = ?2")
-                .bind(kind)
-                .bind(value)
-                .fetch_optional(&self.pool)
-                .await?;
-
-        if let Some(id) = id {
-            tracing::debug!(tag_id = id, kind, value, "tag already exists");
-            return Ok(id);
-        }
-
-        let id = sqlx::query_scalar(
-            "INSERT INTO tags (kind, value, label, source) VALUES (?1, ?2, ?3, 'system') RETURNING id"
-        )
-        .bind(kind)
-        .bind(value)
-        .bind(label)
-        .fetch_one(&self.pool)
-        .await?;
-        tracing::info!(tag_id = id, kind, value, "created new tag");
-
-        Ok(id)
-    }
-
-    #[tracing::instrument(skip(self))]
-    async fn link_message_tag(&self, message_id: &str, tag_id: i64) -> Result<(), AppError> {
-        sqlx::query("INSERT OR IGNORE INTO message_tags (message_id, tag_id) VALUES (?1, ?2)")
-            .bind(message_id)
-            .bind(tag_id)
-            .execute(&self.pool)
-            .await?;
-        tracing::debug!(message_id, tag_id, "linked message to tag");
-        Ok(())
-    }
-
-    #[tracing::instrument(skip(self))]
-    async fn list_tags(&self) -> Result<Vec<Tag>, AppError> {
+    async fn list_tags(&self) -> Result<Vec<Tag>, RepositoryError> {
         let tags = sqlx::query_as::<_, Tag>(
             r#"
             SELECT
@@ -261,7 +231,6 @@ impl Repository for SqlxRepository {
         )
         .fetch_all(&self.pool)
         .await?;
-        tracing::debug!(count = tags.len(), "listed tags");
         Ok(tags)
     }
 }
@@ -269,15 +238,44 @@ impl Repository for SqlxRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::repository::{InboundAttachmentRecord, InboundTagRecord};
+
+    fn inbound_record(id: &str, attachment_id: &str, message_id: &str) -> InboundMessageRecord {
+        InboundMessageRecord {
+            id: id.to_string(),
+            from_address: "from@example.com".to_string(),
+            to_address: "to@example.com".to_string(),
+            subject: Some("Subject".to_string()),
+            date: None,
+            message_id: Some(message_id.to_string()),
+            raw_path: format!("/tmp/{id}.eml"),
+            body_text: Some("Body".to_string()),
+            body_html: None,
+            attachments: vec![InboundAttachmentRecord {
+                id: attachment_id.to_string(),
+                filename: Some("hello.txt".to_string()),
+                content_type: Some("text/plain".to_string()),
+                size: 4,
+                path: format!("/tmp/{attachment_id}.txt"),
+            }],
+            tags: vec![InboundTagRecord {
+                kind: "recipient_address".to_string(),
+                value: "to@example.com".to_string(),
+                label: "To: to@example.com".to_string(),
+                source: "system".to_string(),
+            }],
+        }
+    }
 
     #[tokio::test]
-    async fn test_migrate_creates_schema() {
+    async fn migrate_creates_schema() {
         let repo = SqlxRepository::init_pool_in_memory().await.unwrap();
         let tables: Vec<String> =
             sqlx::query_scalar("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
                 .fetch_all(&repo.pool)
                 .await
                 .unwrap();
+        assert!(tables.contains(&"_sqlx_migrations".to_string()));
         assert!(tables.contains(&"messages".to_string()));
         assert!(tables.contains(&"attachments".to_string()));
         assert!(tables.contains(&"tags".to_string()));
@@ -285,13 +283,32 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_seed_tags_idempotent() {
+    async fn ingest_message_is_transactional() {
         let repo = SqlxRepository::init_pool_in_memory().await.unwrap();
-        SqlxRepository::seed_tags(&repo.pool).await.unwrap();
-        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM tags")
+
+        repo.ingest_message(inbound_record("msg-1", "att-1", "<dup>"))
+            .await
+            .unwrap();
+
+        let duplicate = repo
+            .ingest_message(inbound_record("msg-2", "att-2", "<dup>"))
+            .await;
+        assert!(duplicate.is_err());
+
+        let page = repo
+            .list_messages(ListMessagesQuery {
+                tag_id: None,
+                limit: 20,
+                offset: 0,
+            })
+            .await
+            .unwrap();
+        assert_eq!(page.total, 1);
+
+        let attachment_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM attachments")
             .fetch_one(&repo.pool)
             .await
             .unwrap();
-        assert_eq!(count, 0);
+        assert_eq!(attachment_count, 1);
     }
 }

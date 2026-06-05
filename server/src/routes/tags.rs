@@ -1,4 +1,4 @@
-use axum::{extract::State, Json};
+use axum::{Json, extract::State};
 
 use crate::error::AppError;
 use crate::models::Tag;
@@ -16,39 +16,42 @@ mod tests {
     use super::*;
     use std::sync::Arc;
 
-    use crate::repository::sqlx::SqlxRepository;
+    use crate::repository::{InboundMessageRecord, InboundTagRecord, sqlx::SqlxRepository};
+    use crate::services::inbound::InboundMessageService;
 
     #[tokio::test]
     async fn test_list_tags_with_counts() {
-        let repo = SqlxRepository::init_pool_in_memory().await.unwrap();
+        let repo = Arc::new(SqlxRepository::init_pool_in_memory().await.unwrap());
         let state = AppState {
-            repo: Arc::new(repo),
-            data_dir: std::path::PathBuf::from("/tmp"),
+            inbound_service: Arc::new(InboundMessageService::new(
+                repo.clone(),
+                std::path::PathBuf::from("/tmp"),
+            )),
+            repo,
         };
-
-        let tag_id = state
-            .repo
-            .ensure_tag("recipient_address", "to@example.com", "To: to@example.com")
-            .await
-            .unwrap();
 
         state
             .repo
-            .create_message(
-                "msg-1",
-                "from@example.com",
-                "to@example.com",
-                None,
-                None,
-                None,
-                "/tmp/raw.msg",
-                None,
-                None,
-            )
+            .ingest_message(InboundMessageRecord {
+                id: "msg-1".to_string(),
+                from_address: "from@example.com".to_string(),
+                to_address: "to@example.com".to_string(),
+                subject: None,
+                date: None,
+                message_id: Some("<msg-1>".to_string()),
+                raw_path: "/tmp/raw.msg".to_string(),
+                body_text: None,
+                body_html: None,
+                attachments: Vec::new(),
+                tags: vec![InboundTagRecord {
+                    kind: "recipient_address".to_string(),
+                    value: "to@example.com".to_string(),
+                    label: "To: to@example.com".to_string(),
+                    source: "system".to_string(),
+                }],
+            })
             .await
             .unwrap();
-
-        state.repo.link_message_tag("msg-1", tag_id).await.unwrap();
 
         let res = list(State(state)).await.unwrap();
         let tag = res.0.iter().find(|t| t.value == "to@example.com").unwrap();

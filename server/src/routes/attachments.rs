@@ -18,7 +18,7 @@ pub async fn download(
 ) -> Result<impl IntoResponse, AppError> {
     let meta = state
         .repo
-        .get_attachment_meta(&id)
+        .get_attachment_download(&id)
         .await?
         .ok_or(AppError::NotFound)?;
 

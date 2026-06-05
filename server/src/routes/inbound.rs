@@ -1,15 +1,13 @@
 use axum::{
+    Json,
     extract::{Multipart, State},
     http::StatusCode,
     response::IntoResponse,
-    Json,
 };
 
 use crate::error::AppError;
 use crate::models::{InboundMetadata, InboundResponse};
-use crate::mime_parser::parse_message;
 use crate::routes::AppState;
-use crate::storage;
 
 /// Ingest a raw MIME email via multipart form data.
 ///
@@ -45,70 +43,20 @@ pub async fn handler(
                 .text()
                 .await
                 .map_err(|e| AppError::BadRequest(e.to_string()))?;
-            metadata = Some(
-                serde_json::from_str(&text)
-                    .map_err(|e| AppError::BadRequest(e.to_string()))?,
-            );
+            metadata =
+                Some(serde_json::from_str(&text).map_err(|e| AppError::BadRequest(e.to_string()))?);
         }
     }
 
     let raw_mime = raw_mime.ok_or_else(|| AppError::BadRequest("missing raw_mime".to_string()))?;
     let metadata = metadata.ok_or_else(|| AppError::BadRequest("missing metadata".to_string()))?;
 
-    let msg_id = storage::generate_id();
-    storage::ensure_dirs(&state.data_dir)?;
-    storage::save_raw(&state.data_dir, &msg_id, &raw_mime).await?;
-
-    let parsed = parse_message(&raw_mime)?;
-
-    state
-        .repo
-        .create_message(
-            &msg_id,
-            &metadata.from,
-            &metadata.to,
-            Some(&metadata.headers.subject),
-            Some(&metadata.headers.date),
-            Some(&metadata.headers.message_id),
-            &storage::raw_path(&state.data_dir, &msg_id).to_string_lossy(),
-            parsed.body_text.as_deref(),
-            parsed.body_html.as_deref(),
-        )
-        .await?;
-
-    for att in parsed.attachments {
-        let att_id = storage::generate_id();
-        storage::save_attachment(&state.data_dir, &att_id, &att.body).await?;
-        state
-            .repo
-            .create_attachment(
-                &att_id,
-                &msg_id,
-                att.filename.as_deref(),
-                Some(&att.content_type),
-                att.body.len() as i64,
-                &storage::attachment_path(&state.data_dir, &att_id).to_string_lossy(),
-            )
-            .await?;
-    }
-
-    let to = metadata.to.trim().to_lowercase();
-    let address_tag = state
-        .repo
-        .ensure_tag("recipient_address", &to, &format!("To: {to}"))
-        .await?;
-    state.repo.link_message_tag(&msg_id, address_tag).await?;
-
-    if let Some((_, domain)) = to.rsplit_once('@') {
-        let domain_tag = state
-            .repo
-            .ensure_tag("recipient_domain", domain, &format!("Domain: {domain}"))
-            .await?;
-        state.repo.link_message_tag(&msg_id, domain_tag).await?;
-    }
-
-    tracing::info!(msg_id, from = %metadata.from, to = %metadata.to, "inbound message ingested");
-    Ok((StatusCode::CREATED, Json(InboundResponse { id: msg_id })))
+    let response = state.inbound_service.ingest(raw_mime, metadata).await?;
+    tracing::info!(msg_id = %response.id, "inbound message ingested");
+    Ok((
+        StatusCode::CREATED,
+        Json(InboundResponse { id: response.id }),
+    ))
 }
 
 #[cfg(test)]
@@ -117,6 +65,7 @@ mod tests {
     use std::sync::Arc;
 
     use crate::repository::sqlx::SqlxRepository;
+    use crate::services::inbound::InboundMessageService;
     use axum::body::Body;
     use axum::http::Request;
     use tower::ServiceExt;
@@ -137,10 +86,13 @@ mod tests {
     #[tokio::test]
     async fn test_inbound_handler_multipart() {
         let tmp = tempfile::tempdir().unwrap();
-        let repo = SqlxRepository::init_pool_in_memory().await.unwrap();
+        let repo = Arc::new(SqlxRepository::init_pool_in_memory().await.unwrap());
         let state = AppState {
-            repo: Arc::new(repo),
-            data_dir: tmp.path().to_path_buf(),
+            inbound_service: Arc::new(InboundMessageService::new(
+                repo.clone(),
+                tmp.path().to_path_buf(),
+            )),
+            repo,
         };
 
         let raw = b"From: sender@example.com\r\nTo: recipient@example.com\r\nSubject: Hello\r\nContent-Type: text/plain\r\n\r\nBody";
@@ -165,10 +117,13 @@ mod tests {
     #[tokio::test]
     async fn test_inbound_missing_raw_mime() {
         let tmp = tempfile::tempdir().unwrap();
-        let repo = SqlxRepository::init_pool_in_memory().await.unwrap();
+        let repo = Arc::new(SqlxRepository::init_pool_in_memory().await.unwrap());
         let state = AppState {
-            repo: Arc::new(repo),
-            data_dir: tmp.path().to_path_buf(),
+            inbound_service: Arc::new(InboundMessageService::new(
+                repo.clone(),
+                tmp.path().to_path_buf(),
+            )),
+            repo,
         };
 
         let boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW";

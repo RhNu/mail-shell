@@ -1,8 +1,12 @@
 use std::sync::Arc;
 
-use axum::{Router, routing::{get, post}};
+use axum::{
+    Router,
+    routing::{get, post},
+};
 
 use crate::repository::Repository;
+use crate::services::inbound::InboundMessageService;
 
 pub mod attachments;
 pub mod health;
@@ -14,14 +18,12 @@ pub mod tags;
 #[derive(Clone)]
 pub struct AppState {
     pub repo: Arc<dyn Repository>,
-    pub data_dir: std::path::PathBuf,
+    pub inbound_service: Arc<InboundMessageService>,
 }
 
 impl std::fmt::Debug for AppState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("AppState")
-            .field("data_dir", &self.data_dir)
-            .finish_non_exhaustive()
+        f.debug_struct("AppState").finish_non_exhaustive()
     }
 }
 

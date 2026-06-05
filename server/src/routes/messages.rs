@@ -1,11 +1,12 @@
 use axum::{
-    extract::{Path, Query, State},
     Json,
+    extract::{Path, Query, State},
 };
 use serde::Deserialize;
 
 use crate::error::AppError;
 use crate::models::{MessageDetailResponse, MessageSummary, Paginated};
+use crate::repository::ListMessagesQuery;
 use crate::routes::AppState;
 
 /// Query parameters for listing messages.
@@ -26,13 +27,25 @@ pub async fn list(
     let limit = query.limit.unwrap_or(20).clamp(1, 100);
     let offset = (page - 1) as i64 * limit as i64;
 
-    let total = state.repo.count_messages(query.tag).await?;
-    let items = state.repo.list_messages(query.tag, limit as i64, offset).await?;
+    let page_data = state
+        .repo
+        .list_messages(ListMessagesQuery {
+            tag_id: query.tag,
+            limit: limit as i64,
+            offset,
+        })
+        .await?;
 
-    tracing::debug!(page, limit, total, item_count = items.len(), "listed messages");
+    tracing::debug!(
+        page,
+        limit,
+        total = page_data.total,
+        item_count = page_data.items.len(),
+        "listed messages"
+    );
     Ok(Json(Paginated {
-        items,
-        total,
+        items: page_data.items,
+        total: page_data.total,
         page,
         limit,
     }))
@@ -46,16 +59,18 @@ pub async fn detail(
 ) -> Result<Json<MessageDetailResponse>, AppError> {
     let message = state
         .repo
-        .get_message_detail(&id)
+        .get_message(&id)
         .await?
         .ok_or(AppError::NotFound)?;
 
-    let attachments = state.repo.list_attachments_by_message(&id).await?;
-
-    tracing::debug!(message_id = %id, attachment_count = attachments.len(), "retrieved message detail");
+    tracing::debug!(
+        message_id = %id,
+        attachment_count = message.attachments.len(),
+        "retrieved message detail"
+    );
     Ok(Json(MessageDetailResponse {
-        message,
-        attachments,
+        message: message.message,
+        attachments: message.attachments,
     }))
 }
 
@@ -64,29 +79,35 @@ mod tests {
     use super::*;
     use std::sync::Arc;
 
-    use crate::repository::sqlx::SqlxRepository;
+    use crate::repository::{InboundMessageRecord, InboundTagRecord, sqlx::SqlxRepository};
+    use crate::services::inbound::InboundMessageService;
 
     async fn setup_state() -> AppState {
-        let repo = SqlxRepository::init_pool_in_memory().await.unwrap();
+        let repo = Arc::new(SqlxRepository::init_pool_in_memory().await.unwrap());
         AppState {
-            repo: Arc::new(repo),
-            data_dir: std::path::PathBuf::from("/tmp"),
+            inbound_service: Arc::new(InboundMessageService::new(
+                repo.clone(),
+                std::path::PathBuf::from("/tmp"),
+            )),
+            repo,
         }
     }
 
     async fn insert_messages(repo: &dyn crate::repository::Repository, n: usize) {
         for i in 0..n {
-            repo.create_message(
-                &format!("msg-{i}"),
-                "from@example.com",
-                "to@example.com",
-                Some(&format!("Subject {i}")),
-                None,
-                None,
-                &format!("/tmp/{i}.eml"),
-                None,
-                None,
-            )
+            repo.ingest_message(InboundMessageRecord {
+                id: format!("msg-{i}"),
+                from_address: "from@example.com".to_string(),
+                to_address: "to@example.com".to_string(),
+                subject: Some(format!("Subject {i}")),
+                date: None,
+                message_id: Some(format!("<msg-{i}>")),
+                raw_path: format!("/tmp/{i}.eml"),
+                body_text: None,
+                body_html: None,
+                attachments: Vec::new(),
+                tags: Vec::new(),
+            })
             .await
             .unwrap();
         }
@@ -112,21 +133,37 @@ mod tests {
         let state = setup_state().await;
         insert_messages(&*state.repo, 3).await;
 
-        let tag_id = state
+        state
             .repo
-            .ensure_tag("recipient_address", "to@example.com", "To: to@example.com")
+            .ingest_message(InboundMessageRecord {
+                id: "msg-tagged".to_string(),
+                from_address: "from@example.com".to_string(),
+                to_address: "to@example.com".to_string(),
+                subject: Some("Tagged".to_string()),
+                date: None,
+                message_id: Some("<msg-tagged>".to_string()),
+                raw_path: "/tmp/tagged.eml".to_string(),
+                body_text: None,
+                body_html: None,
+                attachments: Vec::new(),
+                tags: vec![InboundTagRecord {
+                    kind: "recipient_address".to_string(),
+                    value: "to@example.com".to_string(),
+                    label: "To: to@example.com".to_string(),
+                    source: "system".to_string(),
+                }],
+            })
             .await
             .unwrap();
-        state.repo.link_message_tag("msg-0", tag_id).await.unwrap();
 
         let query = ListQuery {
             page: None,
             limit: None,
-            tag: Some(tag_id),
+            tag: Some(1),
         };
         let res = list(State(state), Query(query)).await.unwrap();
         assert_eq!(res.total, 1);
-        assert_eq!(res.items[0].id, "msg-0");
+        assert_eq!(res.items[0].id, "msg-tagged");
     }
 
     #[tokio::test]

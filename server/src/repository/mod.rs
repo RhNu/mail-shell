@@ -1,70 +1,81 @@
 use async_trait::async_trait;
 
-use crate::error::AppError;
 use crate::models::{AttachmentDownloadMeta, AttachmentMeta, MessageDetail, MessageSummary, Tag};
+
+#[derive(Debug, thiserror::Error)]
+pub enum RepositoryError {
+    #[error("database error: {0}")]
+    Db(#[from] ::sqlx::Error),
+}
+
+#[derive(Debug, Clone)]
+pub struct ListMessagesQuery {
+    pub tag_id: Option<i64>,
+    pub limit: i64,
+    pub offset: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct MessagePage<T> {
+    pub items: Vec<T>,
+    pub total: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct MessageRecord {
+    pub message: MessageDetail,
+    pub attachments: Vec<AttachmentMeta>,
+}
+
+#[derive(Debug, Clone)]
+pub struct InboundAttachmentRecord {
+    pub id: String,
+    pub filename: Option<String>,
+    pub content_type: Option<String>,
+    pub size: i64,
+    pub path: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct InboundTagRecord {
+    pub kind: String,
+    pub value: String,
+    pub label: String,
+    pub source: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct InboundMessageRecord {
+    pub id: String,
+    pub from_address: String,
+    pub to_address: String,
+    pub subject: Option<String>,
+    pub date: Option<String>,
+    pub message_id: Option<String>,
+    pub raw_path: String,
+    pub body_text: Option<String>,
+    pub body_html: Option<String>,
+    pub attachments: Vec<InboundAttachmentRecord>,
+    pub tags: Vec<InboundTagRecord>,
+}
 
 #[async_trait]
 pub trait Repository: Send + Sync {
-    /// Count total messages, optionally filtered by tag.
-    async fn count_messages(&self, tag_id: Option<i64>) -> Result<i64, AppError>;
+    async fn ingest_message(&self, record: InboundMessageRecord) -> Result<(), RepositoryError>;
 
-    /// List messages with optional tag filtering and pagination.
     async fn list_messages(
         &self,
-        tag_id: Option<i64>,
-        limit: i64,
-        offset: i64,
-    ) -> Result<Vec<MessageSummary>, AppError>;
+        query: ListMessagesQuery,
+    ) -> Result<MessagePage<MessageSummary>, RepositoryError>;
 
-    /// Retrieve a single message detail by ID.
-    async fn get_message_detail(&self, id: &str) -> Result<Option<MessageDetail>, AppError>;
+    async fn get_message(&self, id: &str) -> Result<Option<MessageRecord>, RepositoryError>;
 
-    /// List attachments belonging to a message.
-    async fn list_attachments_by_message(
-        &self,
-        message_id: &str,
-    ) -> Result<Vec<AttachmentMeta>, AppError>;
-
-    /// Get attachment metadata (path, filename, content_type) by ID.
-    async fn get_attachment_meta(
+    async fn get_attachment_download(
         &self,
         id: &str,
-    ) -> Result<Option<AttachmentDownloadMeta>, AppError>;
+    ) -> Result<Option<AttachmentDownloadMeta>, RepositoryError>;
 
-    /// Insert a new message.
-    #[allow(clippy::too_many_arguments)]
-    async fn create_message(
-        &self,
-        id: &str,
-        from_address: &str,
-        to_address: &str,
-        subject: Option<&str>,
-        date: Option<&str>,
-        message_id: Option<&str>,
-        raw_path: &str,
-        body_text: Option<&str>,
-        body_html: Option<&str>,
-    ) -> Result<(), AppError>;
-
-    /// Insert a new attachment.
-    async fn create_attachment(
-        &self,
-        id: &str,
-        message_id: &str,
-        filename: Option<&str>,
-        content_type: Option<&str>,
-        size: i64,
-        path: &str,
-    ) -> Result<(), AppError>;
-
-    /// Ensure a tag exists, creating it if necessary. Returns the tag ID.
-    async fn ensure_tag(&self, kind: &str, value: &str, label: &str) -> Result<i64, AppError>;
-
-    /// Link a message to a tag.
-    async fn link_message_tag(&self, message_id: &str, tag_id: i64) -> Result<(), AppError>;
-
-    /// List all tags with associated message counts.
-    async fn list_tags(&self) -> Result<Vec<Tag>, AppError>;
+    async fn list_tags(&self) -> Result<Vec<Tag>, RepositoryError>;
 }
 
 pub mod sqlx;
