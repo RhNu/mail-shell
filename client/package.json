@@ -11,8 +11,10 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@ark-ui/solid": "^5.37.0",
     "@solidjs/router": "^0.15.4",
     "@tanstack/solid-query": "^5.100.14",
+    "lucide-solid": "^1.17.0",
     "openapi-fetch": "^0.17.0",
     "solid-js": "^1.9.9"
   },
