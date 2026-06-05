@@ -14,7 +14,7 @@ export function ConnectivityBanner(props: ConnectivityBannerProps): JSX.Element 
         <Banner>网络已断开，应用当前无法连接服务器。</Banner>
       </Match>
       <Match when={props.status === 'service-unreachable'}>
-        <Banner>暂时无法连接 mail-shell 服务，正在重试。</Banner>
+        <Banner>暂时无法连接 Mail Shell 服务，正在重试。</Banner>
       </Match>
       <Match when={props.status === 'online'}>
         <></>

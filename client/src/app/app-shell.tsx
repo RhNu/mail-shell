@@ -24,7 +24,7 @@ function MobileHeader() {
   return (
     <header class="flex h-14 items-center justify-between border-b border-zinc-200 px-4 lg:hidden dark:border-zinc-800">
       <div class="text-sm font-semibold uppercase tracking-widest text-zinc-900 dark:text-zinc-100">
-        mail-shell
+        Mail Shell
       </div>
       <Dialog.Root open={open()} onOpenChange={(details) => setOpen(details.open)}>
         <Dialog.Trigger class="rounded-sm p-2 text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800">
@@ -69,7 +69,7 @@ function DesktopSidebar() {
     <aside class="hidden border-r border-zinc-200 bg-zinc-50 lg:flex lg:flex-col dark:border-zinc-800 dark:bg-zinc-950">
       <div class="flex h-14 items-center border-b border-zinc-200 px-6 dark:border-zinc-800">
         <p class="text-sm font-semibold uppercase tracking-[0.2em] text-zinc-900 dark:text-zinc-100">
-          mail-shell
+          Mail Shell
         </p>
       </div>
       <div class="flex-1 overflow-y-auto p-4">

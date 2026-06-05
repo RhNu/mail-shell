@@ -8,8 +8,8 @@ const pwaPlugin = VitePWA({
   injectRegister: 'auto',
   useCredentials: true,
   manifest: {
-    name: 'mail-shell',
-    short_name: 'mail-shell',
+    name: 'Mail Shell',
+    short_name: 'Mail Shell',
     description: 'Small mail-ingest web UI',
     theme_color: '#0ea5e9',
     background_color: '#ffffff',
