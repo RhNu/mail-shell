@@ -5,9 +5,7 @@ use axum::{
 use serde::Deserialize;
 
 use crate::error::AppError;
-use crate::models::{
-    AttachmentMeta, MessageDetail, MessageDetailResponse, MessageSummary, Paginated,
-};
+use crate::models::{MessageDetailResponse, MessageSummary, Paginated};
 use crate::routes::AppState;
 
 /// Query parameters for listing messages.
@@ -28,41 +26,8 @@ pub async fn list(
     let limit = query.limit.unwrap_or(20).clamp(1, 100);
     let offset = (page - 1) as i64 * limit as i64;
 
-    let total: i64 = if let Some(tag_id) = query.tag {
-        sqlx::query_scalar(
-            "SELECT COUNT(*) FROM message_tags WHERE tag_id = ?1",
-        )
-        .bind(tag_id)
-        .fetch_one(&state.pool)
-        .await?
-    } else {
-        sqlx::query_scalar("SELECT COUNT(*) FROM messages")
-            .fetch_one(&state.pool)
-            .await?
-    };
-
-    let items = if let Some(tag_id) = query.tag {
-        sqlx::query_as::<_, MessageSummary>(
-            "SELECT m.* FROM messages m
-             JOIN message_tags mt ON mt.message_id = m.id
-             WHERE mt.tag_id = ?1
-             ORDER BY m.created_at DESC
-             LIMIT ?2 OFFSET ?3",
-        )
-        .bind(tag_id)
-        .bind(limit as i64)
-        .bind(offset)
-        .fetch_all(&state.pool)
-        .await?
-    } else {
-        sqlx::query_as::<_, MessageSummary>(
-            "SELECT * FROM messages ORDER BY created_at DESC LIMIT ?1 OFFSET ?2",
-        )
-        .bind(limit as i64)
-        .bind(offset)
-        .fetch_all(&state.pool)
-        .await?
-    };
+    let total = state.repo.count_messages(query.tag).await?;
+    let items = state.repo.list_messages(query.tag, limit as i64, offset).await?;
 
     tracing::debug!(page, limit, total, item_count = items.len(), "listed messages");
     Ok(Json(Paginated {
@@ -79,19 +44,13 @@ pub async fn detail(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<MessageDetailResponse>, AppError> {
-    let message = sqlx::query_as::<_, MessageDetail>("SELECT * FROM messages WHERE id = ?1")
-        .bind(&id)
-        .fetch_optional(&state.pool)
+    let message = state
+        .repo
+        .get_message_detail(&id)
         .await?
         .ok_or(AppError::NotFound)?;
 
-    let attachments =
-        sqlx::query_as::<_, AttachmentMeta>(
-            "SELECT id, message_id, filename, content_type, size FROM attachments WHERE message_id = ?1",
-        )
-        .bind(&id)
-        .fetch_all(&state.pool)
-        .await?;
+    let attachments = state.repo.list_attachments_by_message(&id).await?;
 
     tracing::debug!(message_id = %id, attachment_count = attachments.len(), "retrieved message detail");
     Ok(Json(MessageDetailResponse {
@@ -103,28 +62,31 @@ pub async fn detail(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db;
+    use std::sync::Arc;
+
+    use crate::repository::sqlx::SqlxRepository;
 
     async fn setup_state() -> AppState {
-        let pool = db::init_pool_in_memory().await.unwrap();
+        let repo = SqlxRepository::init_pool_in_memory().await.unwrap();
         AppState {
-            pool: pool.clone(),
+            repo: Arc::new(repo),
             data_dir: std::path::PathBuf::from("/tmp"),
         }
     }
 
-    async fn insert_messages(pool: &sqlx::SqlitePool, n: usize) {
+    async fn insert_messages(repo: &dyn crate::repository::Repository, n: usize) {
         for i in 0..n {
-            sqlx::query(
-                "INSERT INTO messages (id, from_address, to_address, subject, raw_path)
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
+            repo.create_message(
+                &format!("msg-{i}"),
+                "from@example.com",
+                "to@example.com",
+                Some(&format!("Subject {i}")),
+                None,
+                None,
+                &format!("/tmp/{i}.eml"),
+                None,
+                None,
             )
-            .bind(format!("msg-{i}"))
-            .bind("from@example.com")
-            .bind("to@example.com")
-            .bind(format!("Subject {i}"))
-            .bind(format!("/tmp/{i}.eml"))
-            .execute(pool)
             .await
             .unwrap();
         }
@@ -133,7 +95,7 @@ mod tests {
     #[tokio::test]
     async fn test_list_pagination() {
         let state = setup_state().await;
-        insert_messages(&state.pool, 5).await;
+        insert_messages(&*state.repo, 5).await;
 
         let query = ListQuery {
             page: Some(1),
@@ -148,12 +110,14 @@ mod tests {
     #[tokio::test]
     async fn test_list_filter_by_tag() {
         let state = setup_state().await;
-        insert_messages(&state.pool, 3).await;
+        insert_messages(&*state.repo, 3).await;
 
-        let tag_id = db::ensure_tag(&state.pool, "recipient_address", "to@example.com", "To: to@example.com")
+        let tag_id = state
+            .repo
+            .ensure_tag("recipient_address", "to@example.com", "To: to@example.com")
             .await
             .unwrap();
-        db::link_message_tag(&state.pool, "msg-0", tag_id).await.unwrap();
+        state.repo.link_message_tag("msg-0", tag_id).await.unwrap();
 
         let query = ListQuery {
             page: None,

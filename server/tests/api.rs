@@ -1,7 +1,9 @@
+use std::sync::Arc;
+
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
-use mail_shell_server::db;
+use mail_shell_server::repository::sqlx::SqlxRepository;
 use mail_shell_server::routes::{router, AppState};
 use mail_shell_server::storage;
 use std::path::PathBuf;
@@ -24,9 +26,9 @@ async fn setup() -> (AppState, PathBuf) {
     let tmp = tempfile::tempdir().unwrap();
     let data_dir = tmp.path().to_path_buf();
     storage::ensure_dirs(&data_dir).unwrap();
-    let pool = db::init_pool(&data_dir).await.unwrap();
+    let repo = SqlxRepository::init_pool(&data_dir).await.unwrap();
     let state = AppState {
-        pool: pool.clone(),
+        repo: Arc::new(repo),
         data_dir: data_dir.clone(),
     };
     (state, data_dir)

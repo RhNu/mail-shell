@@ -1,7 +1,8 @@
-use std::{env, net::SocketAddr, path::PathBuf};
+use std::{env, net::SocketAddr, path::PathBuf, sync::Arc};
 
 use axum::Router;
-use mail_shell_server::{db, routes, storage};
+use mail_shell_server::{routes, storage};
+use mail_shell_server::repository::sqlx::SqlxRepository;
 use tower_http::{services::ServeDir, trace::TraceLayer};
 use tracing::info;
 
@@ -29,12 +30,12 @@ async fn main() {
     );
     storage::ensure_dirs(&data_dir).expect("failed to create data directories");
 
-    let pool = db::init_pool(&data_dir)
+    let repo = SqlxRepository::init_pool(&data_dir)
         .await
         .expect("failed to initialize database");
 
     let state = routes::AppState {
-        pool: pool.clone(),
+        repo: Arc::new(repo),
         data_dir: data_dir.clone(),
     };
 

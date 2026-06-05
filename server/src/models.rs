@@ -54,6 +54,14 @@ pub struct AttachmentMeta {
     pub size: Option<i64>,
 }
 
+/// Metadata needed to download an attachment (path + headers).
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct AttachmentDownloadMeta {
+    pub path: String,
+    pub filename: Option<String>,
+    pub content_type: Option<String>,
+}
+
 /// A tag that can be associated with messages.
 ///
 /// `message_count` is populated by aggregate queries and defaults to `None`

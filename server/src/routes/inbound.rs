@@ -5,7 +5,6 @@ use axum::{
     Json,
 };
 
-use crate::db::{ensure_tag, link_message_tag};
 use crate::error::AppError;
 use crate::models::{InboundMetadata, InboundResponse};
 use crate::mime_parser::parse_message;
@@ -62,58 +61,50 @@ pub async fn handler(
 
     let parsed = parse_message(&raw_mime)?;
 
-    sqlx::query(
-        "INSERT INTO messages (id, from_address, to_address, subject, date, message_id, raw_path, body_text, body_html)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-    )
-    .bind(&msg_id)
-    .bind(&metadata.from)
-    .bind(&metadata.to)
-    .bind(&metadata.headers.subject)
-    .bind(&metadata.headers.date)
-    .bind(&metadata.headers.message_id)
-    .bind(storage::raw_path(&state.data_dir, &msg_id).to_string_lossy().to_string())
-    .bind(parsed.body_text)
-    .bind(parsed.body_html)
-    .execute(&state.pool)
-    .await?;
+    state
+        .repo
+        .create_message(
+            &msg_id,
+            &metadata.from,
+            &metadata.to,
+            Some(&metadata.headers.subject),
+            Some(&metadata.headers.date),
+            Some(&metadata.headers.message_id),
+            &storage::raw_path(&state.data_dir, &msg_id).to_string_lossy(),
+            parsed.body_text.as_deref(),
+            parsed.body_html.as_deref(),
+        )
+        .await?;
 
     for att in parsed.attachments {
         let att_id = storage::generate_id();
         storage::save_attachment(&state.data_dir, &att_id, &att.body).await?;
-        sqlx::query(
-            "INSERT INTO attachments (id, message_id, filename, content_type, size, path)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        )
-        .bind(&att_id)
-        .bind(&msg_id)
-        .bind(att.filename)
-        .bind(att.content_type)
-        .bind(att.body.len() as i64)
-        .bind(storage::attachment_path(&state.data_dir, &att_id).to_string_lossy().to_string())
-        .execute(&state.pool)
-        .await?;
+        state
+            .repo
+            .create_attachment(
+                &att_id,
+                &msg_id,
+                att.filename.as_deref(),
+                Some(&att.content_type),
+                att.body.len() as i64,
+                &storage::attachment_path(&state.data_dir, &att_id).to_string_lossy(),
+            )
+            .await?;
     }
 
     let to = metadata.to.trim().to_lowercase();
-    let address_tag = ensure_tag(
-        &state.pool,
-        "recipient_address",
-        &to,
-        &format!("To: {to}"),
-    )
-    .await?;
-    link_message_tag(&state.pool, &msg_id, address_tag).await?;
+    let address_tag = state
+        .repo
+        .ensure_tag("recipient_address", &to, &format!("To: {to}"))
+        .await?;
+    state.repo.link_message_tag(&msg_id, address_tag).await?;
 
     if let Some((_, domain)) = to.rsplit_once('@') {
-        let domain_tag = ensure_tag(
-            &state.pool,
-            "recipient_domain",
-            domain,
-            &format!("Domain: {domain}"),
-        )
-        .await?;
-        link_message_tag(&state.pool, &msg_id, domain_tag).await?;
+        let domain_tag = state
+            .repo
+            .ensure_tag("recipient_domain", domain, &format!("Domain: {domain}"))
+            .await?;
+        state.repo.link_message_tag(&msg_id, domain_tag).await?;
     }
 
     tracing::info!(msg_id, from = %metadata.from, to = %metadata.to, "inbound message ingested");
@@ -123,7 +114,9 @@ pub async fn handler(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db;
+    use std::sync::Arc;
+
+    use crate::repository::sqlx::SqlxRepository;
     use axum::body::Body;
     use axum::http::Request;
     use tower::ServiceExt;
@@ -144,9 +137,9 @@ mod tests {
     #[tokio::test]
     async fn test_inbound_handler_multipart() {
         let tmp = tempfile::tempdir().unwrap();
-        let pool = db::init_pool_in_memory().await.unwrap();
+        let repo = SqlxRepository::init_pool_in_memory().await.unwrap();
         let state = AppState {
-            pool,
+            repo: Arc::new(repo),
             data_dir: tmp.path().to_path_buf(),
         };
 
@@ -172,9 +165,9 @@ mod tests {
     #[tokio::test]
     async fn test_inbound_missing_raw_mime() {
         let tmp = tempfile::tempdir().unwrap();
-        let pool = db::init_pool_in_memory().await.unwrap();
+        let repo = SqlxRepository::init_pool_in_memory().await.unwrap();
         let state = AppState {
-            pool,
+            repo: Arc::new(repo),
             data_dir: tmp.path().to_path_buf(),
         };
 

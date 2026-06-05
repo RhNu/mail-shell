@@ -1,4 +1,8 @@
+use std::sync::Arc;
+
 use axum::{Router, routing::{get, post}};
+
+use crate::repository::Repository;
 
 pub mod attachments;
 pub mod health;
@@ -9,7 +13,7 @@ pub mod tags;
 /// Shared application state passed to all Axum handlers.
 #[derive(Clone)]
 pub struct AppState {
-    pub pool: sqlx::SqlitePool,
+    pub repo: Arc<dyn Repository>,
     pub data_dir: std::path::PathBuf,
 }
 
