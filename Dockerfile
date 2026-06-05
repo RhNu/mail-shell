@@ -3,7 +3,7 @@ WORKDIR /workspace
 
 RUN corepack enable
 
-COPY package.json pnpm-workspace.yaml ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY client/package.json ./client/package.json
 COPY worker/package.json ./worker/package.json
 RUN pnpm install --frozen-lockfile
@@ -37,4 +37,3 @@ EXPOSE 3000
 VOLUME ["/var/lib/mail-shell"]
 
 CMD ["mail-shell-server"]
-
