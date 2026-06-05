@@ -1,10 +1,11 @@
 use std::{env, net::SocketAddr, path::PathBuf, sync::Arc};
 
-use axum::Router;
+use axum::{Router, http::HeaderValue};
 use mail_shell_server::repository::sqlx::SqlxRepository;
 use mail_shell_server::services::inbound::InboundMessageService;
 use mail_shell_server::{routes, storage};
-use tower_http::{services::ServeDir, trace::TraceLayer};
+use tower::Layer;
+use tower_http::{services::ServeDir, set_header::SetResponseHeaderLayer, trace::TraceLayer};
 use tracing::info;
 
 #[tokio::main]
@@ -42,9 +43,16 @@ async fn main() {
     };
 
     let assets_dir = PathBuf::from("client/dist");
+    let serve_dir = ServeDir::new(assets_dir).append_index_html_on_directories(true);
+    let serve_dir = SetResponseHeaderLayer::overriding(
+        axum::http::header::ACCESS_CONTROL_ALLOW_ORIGIN,
+        HeaderValue::from_static("*"),
+    )
+    .layer(serve_dir);
+
     let app = Router::new()
         .merge(routes::router(state))
-        .fallback_service(ServeDir::new(assets_dir).append_index_html_on_directories(true))
+        .fallback_service(serve_dir)
         .layer(TraceLayer::new_for_http());
 
     info!(listen_addr = %addr, "mail-shell server listening");

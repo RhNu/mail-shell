@@ -3,7 +3,10 @@ import { useLocation } from '@solidjs/router';
 import { Dialog } from '@ark-ui/solid/dialog';
 import { Portal } from 'solid-js/web';
 import { Menu, X, Inbox } from 'lucide-solid';
+import { ConnectivityBanner } from '../components/connectivity-banner';
 import { TagNav } from '../components/tag-nav';
+import { PwaUpdateController } from '../features/system/pwa-update-controller';
+import { useConnectivityStatus } from '../features/system/use-connectivity-status';
 
 function navCls(active: boolean) {
   return [
@@ -86,11 +89,15 @@ function DesktopSidebar() {
 }
 
 export function AppShell(props: { children?: JSX.Element }): JSX.Element {
+  const connectivity = useConnectivityStatus();
+
   return (
     <div class="min-h-screen bg-zinc-50 lg:grid lg:grid-cols-[240px_1fr] dark:bg-zinc-950">
+      <PwaUpdateController />
       <MobileHeader />
       <DesktopSidebar />
       <main class="flex min-w-0 flex-col">
+        <ConnectivityBanner status={connectivity.status()} />
         <div class="mx-auto w-full max-w-5xl p-4 sm:p-6">{props.children}</div>
       </main>
     </div>

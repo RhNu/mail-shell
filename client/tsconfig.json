@@ -7,7 +7,7 @@
     "strict": true,
     "jsx": "preserve",
     "jsxImportSource": "solid-js",
-    "types": ["vite/client", "node", "vitest/globals"],
+    "types": ["vite/client", "vite-plugin-pwa/client", "node", "vitest/globals"],
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
