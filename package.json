@@ -12,6 +12,7 @@
     "lint:client": "pnpm exec oxlint client --ignore-pattern \"client/src/api/generated/**/*\" && pnpm --filter @mail-shell/client lint",
     "lint:worker": "pnpm exec oxlint worker",
     "lint:ox": "pnpm exec oxlint . --ignore-pattern \"client/src/api/generated/**/*\"",
+    "test:client": "pnpm --filter @mail-shell/client test",
     "typecheck": "pnpm --filter @mail-shell/client check && pnpm --filter @mail-shell/worker check && cargo check --workspace",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck",
     "build:client": "pnpm --filter @mail-shell/client build",

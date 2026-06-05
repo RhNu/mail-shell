@@ -1,5 +1,5 @@
 import { render } from 'solid-js/web';
-import { HashRouter, Route } from '@solidjs/router';
+import { HashRouter } from '@solidjs/router';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import App from './App';
 import { queryClient } from './lib/query-client';
@@ -15,7 +15,7 @@ render(
   () => (
     <QueryClientProvider client={queryClient}>
       <HashRouter>
-        <Route path="/" component={App} />
+        <App />
       </HashRouter>
     </QueryClientProvider>
   ),
