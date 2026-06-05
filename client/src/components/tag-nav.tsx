@@ -26,7 +26,7 @@ function kindLabel(kind: string): string {
   }
 }
 
-export function TagNav() {
+export function TagNav(props: { onNavigate?: () => void } = {}) {
   const location = useLocation();
   const tagsQuery = useTagsList();
   const tags = () => tagsQuery.data ?? [];
@@ -49,6 +49,7 @@ export function TagNav() {
                   return (
                     <a
                       href={href}
+                      onClick={props.onNavigate}
                       class={[
                         'flex items-center gap-2.5 rounded-sm px-3 py-1.5 text-sm transition-colors',
                         active

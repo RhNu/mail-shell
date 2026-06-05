@@ -1,4 +1,4 @@
-import { Show } from 'solid-js';
+import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
 import { useParams } from '@solidjs/router';
 import { ArrowLeft, Calendar, User } from 'lucide-solid';
 import { useMessageDetail } from '../../features/messages/queries';
@@ -7,6 +7,7 @@ import { EmptyState } from '../../components/ui/empty-state';
 import { Skeleton } from '../../components/ui/skeleton';
 import { AttachmentList } from '../../components/attachment-list';
 import { sanitizeEmailHtml } from '../../lib/html-sanitize';
+import { HttpResponseError } from '../../api/core/errors';
 
 function MessageMeta(props: { from: string; to: string; createdAt: string }) {
   return (
@@ -75,40 +76,81 @@ function MessageBody(props: { html: string; bodyText: string | null | undefined 
   );
 }
 
+function RemoteResourcesNotice(props: { onLoadRemoteResources: () => void }) {
+  return (
+    <div class="flex flex-wrap items-center gap-3 rounded-sm border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200">
+      <p class="flex-1">Remote resources are blocked for privacy.</p>
+      <button
+        type="button"
+        onClick={() => props.onLoadRemoteResources()}
+        class="inline-flex items-center rounded-sm bg-amber-900 px-3 py-1.5 font-medium text-amber-50 transition-colors hover:bg-amber-800 dark:bg-amber-200 dark:text-amber-950 dark:hover:bg-amber-100"
+      >
+        Load remote resources
+      </button>
+    </div>
+  );
+}
+
+function MessageLoadedState(props: {
+  query: ReturnType<typeof useMessageDetail>;
+  html: string;
+  bodyText: string | null | undefined;
+  remoteResourcesBlocked: boolean;
+  onLoadRemoteResources: () => void;
+}) {
+  return (
+    <>
+      <div class="flex flex-col gap-4">
+        <h1
+          id="message-detail-heading"
+          class="text-xl font-semibold text-zinc-900 break-words dark:text-zinc-100"
+        >
+          {props.query.data!.subject ?? '(no subject)'}
+        </h1>
+        <MessageMeta
+          from={props.query.data!.from_address}
+          to={props.query.data!.to_address}
+          createdAt={props.query.data!.created_at}
+        />
+      </div>
+      <Show when={props.remoteResourcesBlocked}>
+        <RemoteResourcesNotice onLoadRemoteResources={props.onLoadRemoteResources} />
+      </Show>
+      <MessageBody html={props.html} bodyText={props.bodyText} />
+      <Show when={props.query.data!.attachments.length > 0}>
+        <AttachmentList attachments={props.query.data!.attachments} />
+      </Show>
+    </>
+  );
+}
+
 function MessageDetailContent(props: {
   query: ReturnType<typeof useMessageDetail>;
   html: () => string;
   bodyText: () => string | null | undefined;
+  notFound: boolean;
+  remoteResourcesBlocked: boolean;
+  onLoadRemoteResources: () => void;
 }) {
   return (
     <>
       {props.query.isLoading ? (
         <DetailSkeleton />
       ) : props.query.data ? (
-        <>
-          <div class="flex flex-col gap-4">
-            <h1
-              id="message-detail-heading"
-              class="text-xl font-semibold text-zinc-900 break-words dark:text-zinc-100"
-            >
-              {props.query.data.subject ?? '(no subject)'}
-            </h1>
-            <MessageMeta
-              from={props.query.data.from_address}
-              to={props.query.data.to_address}
-              createdAt={props.query.data.created_at}
-            />
-          </div>
-          <MessageBody html={props.html()} bodyText={props.bodyText()} />
-          <Show when={props.query.data.attachments.length > 0}>
-            <AttachmentList attachments={props.query.data.attachments} />
-          </Show>
-        </>
-      ) : (
+        <MessageLoadedState
+          query={props.query}
+          html={props.html()}
+          bodyText={props.bodyText()}
+          remoteResourcesBlocked={props.remoteResourcesBlocked}
+          onLoadRemoteResources={props.onLoadRemoteResources}
+        />
+      ) : props.notFound ? (
         <EmptyState
           title="Message not found"
           description="The message you are looking for does not exist or has been removed."
         />
+      ) : (
+        <></>
       )}
     </>
   );
@@ -117,8 +159,22 @@ function MessageDetailContent(props: {
 export function MessageDetailRoute() {
   const params = useParams<{ messageId: string }>();
   const query = useMessageDetail(() => params.messageId);
-  const html = () => sanitizeEmailHtml(query.data?.body_html ?? '');
+  const [allowRemoteResources, setAllowRemoteResources] = createSignal(false);
+  const sanitizedHtml = createMemo(() =>
+    sanitizeEmailHtml(query.data?.body_html ?? '', {
+      allowRemoteResources: allowRemoteResources(),
+    }),
+  );
   const bodyText = () => query.data?.body_text;
+  const isNotFound = () =>
+    query.isError && query.error instanceof HttpResponseError && query.error.status === 404;
+
+  createEffect(
+    on(
+      () => params.messageId,
+      () => setAllowRemoteResources(false),
+    ),
+  );
 
   return (
     <section aria-labelledby="message-detail-heading" class="flex flex-col gap-6">
@@ -128,13 +184,20 @@ export function MessageDetailRoute() {
       >
         <ArrowLeft size={16} /> Back to inbox
       </a>
-      {query.isError && (
+      {query.isError && !isNotFound() && (
         <ErrorBanner
           message={query.error?.message ?? 'Failed to load message'}
           onRetry={() => query.refetch()}
         />
       )}
-      <MessageDetailContent query={query} html={html} bodyText={bodyText} />
+      <MessageDetailContent
+        query={query}
+        html={() => sanitizedHtml().html}
+        bodyText={bodyText}
+        notFound={isNotFound()}
+        remoteResourcesBlocked={sanitizedHtml().hasBlockedRemoteResources}
+        onLoadRemoteResources={() => setAllowRemoteResources(true)}
+      />
     </section>
   );
 }

@@ -1,4 +1,4 @@
-import { createSignal, type Accessor, type JSX } from 'solid-js';
+import { createEffect, createMemo, createSignal, type Accessor, type JSX } from 'solid-js';
 import { useMessagesList } from '../features/messages/queries';
 import type { MessageListQuery, MessageSummary } from '../features/messages/models';
 import { SearchInput } from './ui/search-input';
@@ -99,6 +99,7 @@ function InboxToolbar(props: {
 export function InboxScreen(props: InboxScreenProps): JSX.Element {
   const [page, setPage] = createSignal(1);
   const [searchQuery, setSearchQuery] = createSignal('');
+  const queryKey = createMemo(() => JSON.stringify(props.query() ?? {}));
   const messagesQuery = useMessagesList(() => ({
     ...props.query(),
     page: page(),
@@ -106,6 +107,12 @@ export function InboxScreen(props: InboxScreenProps): JSX.Element {
   }));
   const totalPages = () =>
     messagesQuery.data ? Math.ceil(messagesQuery.data.total / messagesQuery.data.limit) : 0;
+
+  createEffect(() => {
+    queryKey();
+    setPage(1);
+  });
+
   return (
     <section class="flex flex-col gap-4">
       <InboxToolbar

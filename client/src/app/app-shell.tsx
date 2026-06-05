@@ -1,4 +1,4 @@
-import { type JSX } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import { useLocation } from '@solidjs/router';
 import { Dialog } from '@ark-ui/solid/dialog';
 import { Portal } from 'solid-js/web';
@@ -16,13 +16,14 @@ function navCls(active: boolean) {
 
 function MobileHeader() {
   const location = useLocation();
+  const [open, setOpen] = createSignal(false);
   const isInboxActive = () => location.pathname === '/';
   return (
     <header class="flex h-14 items-center justify-between border-b border-zinc-200 px-4 lg:hidden dark:border-zinc-800">
       <div class="text-sm font-semibold uppercase tracking-widest text-zinc-900 dark:text-zinc-100">
         mail-shell
       </div>
-      <Dialog.Root>
+      <Dialog.Root open={open()} onOpenChange={(details) => setOpen(details.open)}>
         <Dialog.Trigger class="rounded-sm p-2 text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800">
           <Menu size={20} />
           <span class="sr-only">Open Menu</span>
@@ -41,14 +42,14 @@ function MobileHeader() {
                 </Dialog.CloseTrigger>
               </div>
               <nav aria-label="Primary" class="flex flex-col gap-1">
-                <a href="#/" class={navCls(isInboxActive())}>
+                <a href="#/" class={navCls(isInboxActive())} onClick={() => setOpen(false)}>
                   <Inbox size={18} />
                   <span>Inbox</span>
                 </a>
               </nav>
               <div class="my-4 border-t border-zinc-200 dark:border-zinc-800" />
               <nav aria-label="Tags">
-                <TagNav />
+                <TagNav onNavigate={() => setOpen(false)} />
               </nav>
             </Dialog.Content>
           </Dialog.Positioner>
