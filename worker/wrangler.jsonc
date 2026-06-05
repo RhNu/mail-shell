@@ -3,4 +3,6 @@
   "name": "mail-shell-worker",
   "main": "./src/index.ts",
   "compatibility_date": "2026-06-05",
+  "workers_dev": false,
+  "preview_urls": false,
 }
