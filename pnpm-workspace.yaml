@@ -1,4 +1,7 @@
 packages:
   - client
   - worker
-
+allowBuilds:
+  esbuild: true
+  sharp: true
+  workerd: true
