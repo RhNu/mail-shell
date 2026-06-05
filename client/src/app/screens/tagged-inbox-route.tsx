@@ -1,18 +1,34 @@
+import { createMemo } from 'solid-js';
 import { useParams } from '@solidjs/router';
+import { useTagsList } from '../../features/tags/queries';
+import { InboxScreen } from '../../components/inbox-screen';
+import { TagChip } from '../../components/ui/tag-chip';
 
 export function TaggedInboxRoute() {
   const params = useParams<{ tagId: string }>();
+  const tagId = createMemo(() => Number(params.tagId));
+  const tagsQuery = useTagsList();
+  const tag = createMemo(() => tagsQuery.data?.find((t) => t.id === tagId()));
 
   return (
-    <section aria-labelledby="tagged-inbox-heading" class="flex flex-col gap-3">
-      <h2 id="tagged-inbox-heading" class="text-2xl font-semibold">
-        Tagged inbox
-      </h2>
-      <p class="max-w-2xl text-sm leading-6 text-stone-300">
-        Filtered message list route scoped to a single tag. This keeps tag drill-down shareable as a
-        first-class URL instead of a purely local UI state.
-      </p>
-      <p class="text-sm text-stone-400">Selected tag: {params.tagId}</p>
-    </section>
+    <InboxScreen
+      title={
+        <div class="flex items-center gap-2">
+          <a
+            href="#/"
+            class="text-sm text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+          >
+            Inbox
+          </a>
+          <span class="text-sm text-zinc-400 dark:text-zinc-500">/</span>
+          <h1 class="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+            {tag()?.label ?? 'Tagged'}
+          </h1>
+        </div>
+      }
+      query={() => ({ tag: tagId() })}
+      tagChip={tag() ? <TagChip label={tag()!.label} active /> : undefined}
+      emptyDescription="No messages match this tag."
+    />
   );
 }

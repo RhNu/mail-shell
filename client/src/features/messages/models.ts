@@ -5,3 +5,4 @@ export type MessageListResponse = components['schemas']['MessageListResponse'];
 export type MessageSummary = components['schemas']['MessageSummary'];
 export type MessageDetail = components['schemas']['MessageDetail'];
 export type MessageDetailResponse = components['schemas']['MessageDetailResponse'];
+export type AttachmentMeta = components['schemas']['AttachmentMeta'];
