@@ -18,6 +18,7 @@ pnpm install
 pnpm build
 cargo check --workspace
 docker build -t mail-shell .
+docker compose up
 ```
 
 ## Runtime shape
@@ -26,3 +27,10 @@ docker build -t mail-shell .
 - `Server` stores SQLite indexes and filesystem blobs, and serves the built client.
 - Classification is modeled as system tags with data payloads such as recipient address and recipient domain.
 
+## Docker Compose
+
+The repository includes a root `compose.yaml` for running the server image locally:
+
+```bash
+docker compose up
+```

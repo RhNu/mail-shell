@@ -17,13 +17,14 @@ WORKDIR /workspace
 COPY Cargo.toml rust-toolchain.toml ./
 COPY server/Cargo.toml ./server/Cargo.toml
 COPY server/src ./server/src
+COPY server/migrations ./server/migrations
 RUN cargo build --release -p mail-shell-server
 
 FROM debian:bookworm-slim
 WORKDIR /app
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates \
+  && apt-get install -y --no-install-recommends ca-certificates curl \
   && rm -rf /var/lib/apt/lists/*
 
 COPY --from=server-builder /workspace/target/release/mail-shell-server /usr/local/bin/mail-shell-server
@@ -31,9 +32,9 @@ COPY --from=client-builder /workspace/client/dist ./client/dist
 
 ENV MAIL_SHELL_HOST=0.0.0.0
 ENV MAIL_SHELL_PORT=3000
-ENV MAIL_SHELL_DATA_DIR=/var/lib/mail-shell
+ENV MAIL_SHELL_DATA_DIR=/data
 EXPOSE 3000
 
-VOLUME ["/var/lib/mail-shell"]
+VOLUME ["/data"]
 
 CMD ["mail-shell-server"]
