@@ -1,0 +1,16 @@
+node_modules/
+.pnpm-store/
+target/
+dist/
+.wrangler/
+.DS_Store
+Thumbs.db
+.env
+.env.*
+coverage/
+data/
+tmp/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+

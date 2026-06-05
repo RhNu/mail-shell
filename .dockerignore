@@ -1,0 +1,10 @@
+.git
+.github
+node_modules
+.pnpm-store
+target
+.wrangler
+data
+tmp
+coverage
+

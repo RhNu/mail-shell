@@ -1,0 +1,12 @@
+{
+  "name": "mail-shell",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.22.0",
+  "scripts": {
+    "build": "pnpm --filter @mail-shell/client build",
+    "check": "pnpm --filter @mail-shell/client check && pnpm --filter @mail-shell/worker check && cargo check --workspace",
+    "build:client": "pnpm --filter @mail-shell/client build",
+    "check:worker": "pnpm --filter @mail-shell/worker check"
+  }
+}
