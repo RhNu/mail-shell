@@ -17,7 +17,7 @@ export function ErrorBanner(props: ErrorBannerProps): JSX.Element {
       />
       <div class="flex-1">
         <p class="text-sm font-medium text-red-800 dark:text-red-300">
-          {props.title ?? 'Something went wrong'}
+          {props.title ?? '出了点问题'}
         </p>
         <p class="mt-0.5 text-sm text-red-700 dark:text-red-400">{props.message}</p>
       </div>
@@ -28,7 +28,7 @@ export function ErrorBanner(props: ErrorBannerProps): JSX.Element {
           class="inline-flex shrink-0 items-center gap-1.5 rounded-sm bg-red-100 px-2.5 py-1.5 text-sm font-medium text-red-800 transition-colors hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50"
         >
           <RotateCcw size={14} />
-          Retry
+          重试
         </button>
       )}
     </div>

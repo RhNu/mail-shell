@@ -33,7 +33,7 @@ export function MessageListItem(props: MessageListItemProps): JSX.Element {
           {props.message.from_address}
         </span>
         <span class="min-w-0 flex-1 truncate text-sm text-zinc-900 dark:text-zinc-100">
-          {props.message.subject ?? '(no subject)'}
+          {props.message.subject ?? '（无主题）'}
         </span>
         <div class="flex shrink-0 items-center gap-3">
           {props.tags.length > 0 && (
@@ -45,7 +45,7 @@ export function MessageListItem(props: MessageListItemProps): JSX.Element {
             {props.attachmentCount ? (
               <>
                 <Paperclip size={12} aria-hidden="true" />
-                <span class="sr-only">Attachments:</span>
+                <span class="sr-only">附件：</span>
                 <span>{props.attachmentCount}</span>
               </>
             ) : null}

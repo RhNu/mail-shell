@@ -35,13 +35,13 @@ export function Pagination(props: PaginationProps): JSX.Element {
   const canGoPrev = () => props.page > 1;
   const canGoNext = () => props.page < props.totalPages;
   return (
-    <nav aria-label="Pagination" class="flex items-center justify-center gap-1">
+    <nav aria-label="分页" class="flex items-center justify-center gap-1">
       <button
         type="button"
         onClick={() => props.onPageChange(props.page - 1)}
         disabled={!canGoPrev()}
         class={btnCls}
-        aria-label="Previous page"
+        aria-label="上一页"
       >
         <ChevronLeft size={16} />
       </button>
@@ -73,7 +73,7 @@ export function Pagination(props: PaginationProps): JSX.Element {
         onClick={() => props.onPageChange(props.page + 1)}
         disabled={!canGoNext()}
         class={btnCls}
-        aria-label="Next page"
+        aria-label="下一页"
       >
         <ChevronRight size={16} />
       </button>

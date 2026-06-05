@@ -19,11 +19,7 @@ type InboxScreenProps = {
 };
 
 function MessageCount(props: { total: number }) {
-  return (
-    <p class="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
-      {props.total} message{props.total === 1 ? '' : 's'}
-    </p>
-  );
+  return <p class="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">{props.total} 封邮件</p>;
 }
 
 function ListSection(props: {
@@ -89,7 +85,7 @@ function InboxToolbar(props: {
         <SearchInput
           value={props.searchQuery}
           onChange={props.onSearchChange}
-          placeholder="Search in current page..."
+          placeholder="在当前页面搜索..."
         />
       </div>
     </div>
@@ -125,7 +121,7 @@ export function InboxScreen(props: InboxScreenProps): JSX.Element {
       />
       {messagesQuery.isError && (
         <ErrorBanner
-          message={messagesQuery.error?.message ?? 'Failed to load messages'}
+          message={messagesQuery.error?.message ?? '加载邮件失败'}
           onRetry={() => messagesQuery.refetch()}
         />
       )}

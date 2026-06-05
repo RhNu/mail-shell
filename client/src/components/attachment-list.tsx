@@ -21,7 +21,7 @@ export function AttachmentList(props: AttachmentListProps): JSX.Element {
   return (
     <div class="border-t border-zinc-200 pt-6 dark:border-zinc-800">
       <h3 class="mb-3 text-sm font-medium text-zinc-900 dark:text-zinc-100">
-        Attachments ({props.attachments.length})
+        附件 ({props.attachments.length})
       </h3>
       <div class="flex flex-col gap-2">
         <For each={props.attachments}>
@@ -34,10 +34,10 @@ export function AttachmentList(props: AttachmentListProps): JSX.Element {
               />
               <div class="min-w-0 flex-1">
                 <p class="truncate text-sm text-zinc-900 dark:text-zinc-100">
-                  {att.filename ?? 'Unnamed attachment'}
+                  {att.filename ?? '未命名附件'}
                 </p>
                 <p class="text-xs text-zinc-500 dark:text-zinc-500">
-                  {att.content_type ?? 'unknown type'}
+                  {att.content_type ?? '未知类型'}
                   {att.size !== null && att.size !== undefined ? ` · ${formatBytes(att.size)}` : ''}
                 </p>
               </div>
@@ -47,7 +47,7 @@ export function AttachmentList(props: AttachmentListProps): JSX.Element {
                 class="inline-flex shrink-0 items-center gap-1.5 rounded-sm border border-zinc-200 px-2.5 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
               >
                 <Download size={14} />
-                <span class="hidden sm:inline">Download</span>
+                <span class="hidden sm:inline">下载</span>
               </a>
             </div>
           )}

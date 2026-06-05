@@ -18,9 +18,9 @@ function groupByKind<T extends { kind: string }>(items: T[]): Record<string, T[]
 function kindLabel(kind: string): string {
   switch (kind) {
     case 'recipient_address':
-      return 'Recipients';
+      return '收件人';
     case 'recipient_domain':
-      return 'Domains';
+      return '域名';
     default:
       return kind;
   }

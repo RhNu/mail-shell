@@ -14,10 +14,10 @@ export function EmptyState(props: EmptyStateProps): JSX.Element {
         {props.icon ?? <Inbox size={40} strokeWidth={1.5} />}
       </div>
       <h3 class="mb-1 text-base font-medium text-zinc-900 dark:text-zinc-100">
-        {props.title ?? 'No messages yet'}
+        {props.title ?? '暂无邮件'}
       </h3>
       <p class="max-w-xs text-sm text-zinc-500 dark:text-zinc-400">
-        {props.description ?? 'Messages will appear here once they are received.'}
+        {props.description ?? '收到邮件后将显示在这里。'}
       </p>
     </div>
   );

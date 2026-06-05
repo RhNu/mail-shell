@@ -20,10 +20,10 @@ function MessageMeta(props: { from: string; to: string; createdAt: string }) {
         />
         <div class="flex flex-col gap-0.5">
           <div class="text-zinc-900 dark:text-zinc-100">
-            <span class="text-zinc-500 dark:text-zinc-400">From:</span> {props.from}
+            <span class="text-zinc-500 dark:text-zinc-400">发件人：</span> {props.from}
           </div>
           <div class="text-zinc-900 dark:text-zinc-100">
-            <span class="text-zinc-500 dark:text-zinc-400">To:</span> {props.to}
+            <span class="text-zinc-500 dark:text-zinc-400">收件人：</span> {props.to}
           </div>
         </div>
       </div>
@@ -63,7 +63,7 @@ function MessageBody(props: { html: string; bodyText: string | null | undefined 
         when={props.html}
         fallback={
           <div class="whitespace-pre-wrap text-sm leading-relaxed text-zinc-800 dark:text-zinc-200">
-            {props.bodyText ?? '(no content)'}
+            {props.bodyText ?? '（无内容）'}
           </div>
         }
       >
@@ -79,13 +79,13 @@ function MessageBody(props: { html: string; bodyText: string | null | undefined 
 function RemoteResourcesNotice(props: { onLoadRemoteResources: () => void }) {
   return (
     <div class="flex flex-wrap items-center gap-3 rounded-sm border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200">
-      <p class="flex-1">Remote resources are blocked for privacy.</p>
+      <p class="flex-1">远程资源因安全原因已被阻止。</p>
       <button
         type="button"
         onClick={() => props.onLoadRemoteResources()}
         class="inline-flex items-center rounded-sm bg-amber-900 px-3 py-1.5 font-medium text-amber-50 transition-colors hover:bg-amber-800 dark:bg-amber-200 dark:text-amber-950 dark:hover:bg-amber-100"
       >
-        Load remote resources
+        加载远程资源
       </button>
     </div>
   );
@@ -105,7 +105,7 @@ function MessageLoadedState(props: {
           id="message-detail-heading"
           class="text-xl font-semibold text-zinc-900 break-words dark:text-zinc-100"
         >
-          {props.query.data!.subject ?? '(no subject)'}
+          {props.query.data!.subject ?? '（无主题）'}
         </h1>
         <MessageMeta
           from={props.query.data!.from_address}
@@ -145,10 +145,7 @@ function MessageDetailContent(props: {
           onLoadRemoteResources={props.onLoadRemoteResources}
         />
       ) : props.notFound ? (
-        <EmptyState
-          title="Message not found"
-          description="The message you are looking for does not exist or has been removed."
-        />
+        <EmptyState title="邮件未找到" description="您查找的邮件不存在或已被移除。" />
       ) : (
         <></>
       )}
@@ -182,11 +179,11 @@ export function MessageDetailRoute() {
         href="#/"
         class="inline-flex w-fit items-center gap-1.5 text-sm text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
       >
-        <ArrowLeft size={16} /> Back to inbox
+        <ArrowLeft size={16} /> 返回收件箱
       </a>
       {query.isError && !isNotFound() && (
         <ErrorBanner
-          message={query.error?.message ?? 'Failed to load message'}
+          message={query.error?.message ?? '加载邮件失败'}
           onRetry={() => query.refetch()}
         />
       )}

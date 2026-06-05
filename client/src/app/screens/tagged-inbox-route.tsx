@@ -18,17 +18,17 @@ export function TaggedInboxRoute() {
             href="#/"
             class="text-sm text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
           >
-            Inbox
+            收件箱
           </a>
           <span class="text-sm text-zinc-400 dark:text-zinc-500">/</span>
           <h1 class="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-            {tag()?.label ?? 'Tagged'}
+            {tag()?.label ?? '已标签'}
           </h1>
         </div>
       }
       query={() => ({ tag: tagId() })}
       tagChip={tag() ? <TagChip label={tag()!.label} active /> : undefined}
-      emptyDescription="No messages match this tag."
+      emptyDescription="没有符合此标签的邮件。"
     />
   );
 }

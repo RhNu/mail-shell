@@ -29,7 +29,7 @@ function MobileHeader() {
       <Dialog.Root open={open()} onOpenChange={(details) => setOpen(details.open)}>
         <Dialog.Trigger class="rounded-sm p-2 text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800">
           <Menu size={20} />
-          <span class="sr-only">Open Menu</span>
+          <span class="sr-only">打开菜单</span>
         </Dialog.Trigger>
         <Portal>
           <Dialog.Backdrop class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
@@ -37,21 +37,21 @@ function MobileHeader() {
             <Dialog.Content class="h-full w-3/4 max-w-sm border-l border-zinc-200 bg-zinc-50 p-6 shadow-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:w-80 dark:border-zinc-800 dark:bg-zinc-950">
               <div class="mb-6 flex items-center justify-between">
                 <Dialog.Title class="text-sm font-semibold uppercase tracking-widest text-zinc-900 dark:text-zinc-100">
-                  Menu
+                  菜单
                 </Dialog.Title>
                 <Dialog.CloseTrigger class="rounded-sm p-2 text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800">
                   <X size={20} />
-                  <span class="sr-only">Close Menu</span>
+                  <span class="sr-only">关闭菜单</span>
                 </Dialog.CloseTrigger>
               </div>
-              <nav aria-label="Primary" class="flex flex-col gap-1">
+              <nav aria-label="主导航" class="flex flex-col gap-1">
                 <a href="#/" class={navCls(isInboxActive())} onClick={() => setOpen(false)}>
                   <Inbox size={18} />
-                  <span>Inbox</span>
+                  <span>收件箱</span>
                 </a>
               </nav>
               <div class="my-4 border-t border-zinc-200 dark:border-zinc-800" />
-              <nav aria-label="Tags">
+              <nav aria-label="标签">
                 <TagNav onNavigate={() => setOpen(false)} />
               </nav>
             </Dialog.Content>
@@ -73,14 +73,14 @@ function DesktopSidebar() {
         </p>
       </div>
       <div class="flex-1 overflow-y-auto p-4">
-        <nav aria-label="Primary" class="mb-4 flex flex-col gap-0.5">
+        <nav aria-label="主导航" class="mb-4 flex flex-col gap-0.5">
           <a href="#/" class={navCls(isInboxActive())}>
             <Inbox size={18} />
-            <span>Inbox</span>
+            <span>收件箱</span>
           </a>
         </nav>
         <div class="mb-4 border-t border-zinc-200 dark:border-zinc-800" />
-        <nav aria-label="Tags">
+        <nav aria-label="标签">
           <TagNav />
         </nav>
       </div>
