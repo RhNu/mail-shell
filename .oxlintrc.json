@@ -1,0 +1,32 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["oxc", "typescript", "import", "unicorn"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "pedantic": "error"
+  },
+  "rules": {
+    "import/no-cycle": "error",
+    "typescript/consistent-type-definitions": ["error", "type"],
+    "unicorn/prefer-node-protocol": "error"
+  },
+  "overrides": [
+    {
+      "files": ["client/src/**/*.{ts,tsx}"],
+      "env": {
+        "browser": true
+      },
+      "rules": {
+        "import/no-unassigned-import": "off"
+      }
+    },
+    {
+      "files": ["worker/src/**/*.ts"],
+      "env": {
+        "browser": true,
+        "worker": true
+      }
+    }
+  ]
+}

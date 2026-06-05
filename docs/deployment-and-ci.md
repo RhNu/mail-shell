@@ -12,9 +12,8 @@
 Responsibilities:
 
 - install the workspace
+- run `pnpm check`
 - build the client
-- validate the worker configuration
-- run `cargo check --workspace`
 - build the server+client image
 - push the image to GHCR on `main` and version tags
 

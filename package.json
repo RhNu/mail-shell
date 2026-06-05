@@ -5,8 +5,19 @@
   "packageManager": "pnpm@10.22.0",
   "scripts": {
     "build": "pnpm --filter @mail-shell/client build",
-    "check": "pnpm --filter @mail-shell/client check && pnpm --filter @mail-shell/worker check && cargo check --workspace",
+    "format": "pnpm exec oxfmt --write client worker client/eslint.config.mjs",
+    "format:check": "pnpm exec oxfmt --check client worker client/eslint.config.mjs",
+    "lint": "pnpm lint:ox && pnpm --filter @mail-shell/client lint",
+    "lint:client": "pnpm exec oxlint client && pnpm --filter @mail-shell/client lint",
+    "lint:worker": "pnpm exec oxlint worker",
+    "lint:ox": "pnpm exec oxlint .",
+    "typecheck": "pnpm --filter @mail-shell/client check && pnpm --filter @mail-shell/worker check && cargo check --workspace",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck",
     "build:client": "pnpm --filter @mail-shell/client build",
     "check:worker": "pnpm --filter @mail-shell/worker check"
+  },
+  "devDependencies": {
+    "oxfmt": "^0.53.0",
+    "oxlint": "^1.68.0"
   }
 }

@@ -7,11 +7,10 @@ export default function App() {
           A small inbox surface for Cloudflare-routed mail.
         </h1>
         <p class="max-w-2xl text-base leading-7 text-stone-300 sm:text-lg">
-          This scaffold reserves the client route space, API prefix, and system-tag model
-          for recipient-address and recipient-domain classification.
+          This scaffold reserves the client route space, API prefix, and system-tag model for
+          recipient-address and recipient-domain classification.
         </p>
       </section>
     </main>
   );
 }
-

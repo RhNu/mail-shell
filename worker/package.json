@@ -1,7 +1,7 @@
 {
   "name": "@mail-shell/worker",
-  "private": true,
   "version": "0.1.0",
+  "private": true,
   "type": "module",
   "scripts": {
     "check": "wrangler deploy --dry-run",
@@ -13,4 +13,3 @@
     "wrangler": "^4.47.0"
   }
 }
-
