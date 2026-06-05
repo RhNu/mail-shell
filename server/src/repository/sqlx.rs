@@ -117,6 +117,12 @@ impl Repository for SqlxRepository {
         }
 
         tx.commit().await?;
+        tracing::debug!(
+            message_id = %record.id,
+            attachment_count = record.attachments.len(),
+            tag_count = record.tags.len(),
+            "ingested message"
+        );
         Ok(())
     }
 
@@ -168,6 +174,14 @@ impl Repository for SqlxRepository {
             .await?
         };
 
+        tracing::debug!(
+            total,
+            returned_count = items.len(),
+            tag_filter = ?query.tag_id,
+            limit = query.limit,
+            offset = query.offset,
+            "listed messages"
+        );
         Ok(MessagePage { items, total })
     }
 
@@ -192,6 +206,7 @@ impl Repository for SqlxRepository {
         .fetch_all(&self.pool)
         .await?;
 
+        tracing::debug!(message_id = %id, found = true, "retrieved message detail");
         Ok(Some(MessageRecord {
             message,
             attachments,
@@ -209,6 +224,7 @@ impl Repository for SqlxRepository {
         .bind(id)
         .fetch_optional(&self.pool)
         .await?;
+        tracing::debug!(attachment_id = %id, found = row.is_some(), "retrieved attachment download meta");
         Ok(row)
     }
 
@@ -231,6 +247,7 @@ impl Repository for SqlxRepository {
         )
         .fetch_all(&self.pool)
         .await?;
+        tracing::debug!(tag_count = tags.len(), "listed tags");
         Ok(tags)
     }
 }

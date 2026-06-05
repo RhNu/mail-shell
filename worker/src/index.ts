@@ -12,6 +12,14 @@ type EnvelopeMetadata = {
 
 export default {
   async email(message: ForwardableEmailMessage, env: Env): Promise<void> {
+    console.log('Received email', {
+      from: message.from,
+      to: message.to,
+      subject: message.headers.get('subject') ?? '',
+      'message-id': message.headers.get('message-id') ?? '',
+      date: message.headers.get('date') ?? '',
+    });
+
     const form = new FormData();
     const raw = await new Response(message.raw).arrayBuffer();
     const metadata: EnvelopeMetadata = {
@@ -27,6 +35,11 @@ export default {
     form.set('raw_mime', new File([raw], 'message.eml', { type: 'message/rfc822' }));
     form.set('metadata', JSON.stringify(metadata));
 
+    console.log('Forwarding email to', env.INBOUND_URL, {
+      rawSize: raw.byteLength,
+      metadataSize: JSON.stringify(metadata).length,
+    });
+
     const response = await fetch(env.INBOUND_URL, {
       method: 'POST',
       headers: {
@@ -37,7 +50,15 @@ export default {
     });
 
     if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      console.error('Inbound request failed', {
+        status: response.status,
+        statusText: response.statusText,
+        body,
+      });
       throw new Error(`Inbound request failed with status ${response.status}`);
     }
+
+    console.log('Inbound request succeeded', { status: response.status });
   },
 };

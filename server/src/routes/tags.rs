@@ -17,6 +17,7 @@ use crate::routes::AppState;
 #[tracing::instrument]
 pub async fn list(State(state): State<AppState>) -> Result<Json<Vec<Tag>>, AppError> {
     let tags = state.repo.list_tags().await?;
+    tracing::debug!(tag_count = tags.len(), "listed tags");
     Ok(Json(tags))
 }
 

@@ -47,6 +47,12 @@ impl InboundMessageService {
             written_paths.push(raw_path.clone());
 
             let parsed = parse_message(&raw_mime)?;
+            tracing::debug!(
+                parsed_attachment_count = parsed.attachments.len(),
+                has_text = parsed.body_text.is_some(),
+                has_html = parsed.body_html.is_some(),
+                "parsed inbound message"
+            );
 
             let mut attachments = Vec::with_capacity(parsed.attachments.len());
             for attachment in parsed.attachments {
@@ -64,6 +70,11 @@ impl InboundMessageService {
                 });
             }
 
+            let tags = derive_tags(&metadata.to);
+            tracing::debug!(derived_tag_count = tags.len(), "derived tags");
+
+            let attachment_count = attachments.len();
+            let tag_count = tags.len();
             let record = InboundMessageRecord {
                 id: message_id.clone(),
                 from_address: metadata.from,
@@ -75,10 +86,16 @@ impl InboundMessageService {
                 body_text: parsed.body_text,
                 body_html: parsed.body_html,
                 attachments,
-                tags: derive_tags(&metadata.to),
+                tags,
             };
 
             self.repo.ingest_message(record).await?;
+            tracing::info!(
+                msg_id = %message_id,
+                attachment_count,
+                tag_count,
+                "inbound message ingested"
+            );
             Ok::<InboundResponse, InboundServiceError>(InboundResponse { id: message_id })
         }
         .await;

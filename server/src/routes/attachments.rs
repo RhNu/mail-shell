@@ -40,6 +40,14 @@ pub async fn download(
 
     let bytes = tokio::fs::read(&meta.path).await?;
 
+    tracing::debug!(
+        attachment_id = %id,
+        filename = ?meta.filename,
+        content_type = ?meta.content_type,
+        byte_size = bytes.len(),
+        "sending attachment"
+    );
+
     let mut headers = axum::http::HeaderMap::new();
     if let Some(ct) = meta.content_type
         && let Ok(h) = ct.parse()
