@@ -8,6 +8,7 @@ use axum::{
 use crate::repository::Repository;
 use crate::services::inbound::InboundMessageService;
 
+pub mod api_docs;
 pub mod attachments;
 pub mod health;
 pub mod inbound;
@@ -30,6 +31,7 @@ impl std::fmt::Debug for AppState {
 /// Build the Axum router with all API routes and the given state.
 pub fn router(state: AppState) -> Router {
     Router::new()
+        .route("/api-docs/openapi.json", get(api_docs::handler))
         .route("/api/healthz", get(health::handler))
         .route("/api/inbound", post(inbound::handler))
         .route("/api/messages", get(messages::list))

@@ -1,8 +1,9 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 /// Metadata accompanying an inbound email submission via multipart form.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct InboundMetadata {
     pub from: String,
     pub to: String,
@@ -10,7 +11,7 @@ pub struct InboundMetadata {
 }
 
 /// Key email headers extracted from inbound metadata.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct InboundHeaders {
     #[serde(rename = "message-id")]
     pub message_id: String,
@@ -19,7 +20,7 @@ pub struct InboundHeaders {
 }
 
 /// Summary view of a message for list endpoints.
-#[derive(Debug, Clone, sqlx::FromRow, Serialize)]
+#[derive(Debug, Clone, sqlx::FromRow, Serialize, ToSchema)]
 pub struct MessageSummary {
     pub id: String,
     pub from_address: String,
@@ -31,7 +32,7 @@ pub struct MessageSummary {
 }
 
 /// Full message detail including body content.
-#[derive(Debug, Clone, sqlx::FromRow, Serialize)]
+#[derive(Debug, Clone, sqlx::FromRow, Serialize, ToSchema)]
 pub struct MessageDetail {
     pub id: String,
     pub from_address: String,
@@ -45,7 +46,7 @@ pub struct MessageDetail {
 }
 
 /// Metadata for a single attachment belonging to a message.
-#[derive(Debug, Clone, sqlx::FromRow, Serialize)]
+#[derive(Debug, Clone, sqlx::FromRow, Serialize, ToSchema)]
 pub struct AttachmentMeta {
     pub id: String,
     pub message_id: String,
@@ -66,7 +67,7 @@ pub struct AttachmentDownloadMeta {
 ///
 /// `message_count` is populated by aggregate queries and defaults to `None`
 /// when loaded directly from the `tags` table.
-#[derive(Debug, Clone, sqlx::FromRow, Serialize)]
+#[derive(Debug, Clone, sqlx::FromRow, Serialize, ToSchema)]
 pub struct Tag {
     pub id: i64,
     pub kind: String,
@@ -78,24 +79,30 @@ pub struct Tag {
 }
 
 /// Response wrapper that combines a message with its attachments.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct MessageDetailResponse {
     #[serde(flatten)]
     pub message: MessageDetail,
     pub attachments: Vec<AttachmentMeta>,
 }
 
-/// Generic pagination envelope for list responses.
-#[derive(Debug, Clone, Serialize)]
-pub struct Paginated<T> {
-    pub items: Vec<T>,
+/// Concrete pagination envelope for the message list endpoint.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct MessageListResponse {
+    pub items: Vec<MessageSummary>,
     pub total: i64,
     pub page: u32,
     pub limit: u32,
 }
 
 /// Response returned after successfully ingesting an inbound email.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct InboundResponse {
     pub id: String,
+}
+
+/// Common JSON error body returned by API endpoints.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ErrorResponse {
+    pub error: String,
 }

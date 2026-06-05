@@ -1,10 +1,19 @@
 use axum::{Json, extract::State};
 
 use crate::error::AppError;
-use crate::models::Tag;
+use crate::models::{ErrorResponse, Tag};
 use crate::routes::AppState;
 
 /// List all tags with their associated message counts.
+#[utoipa::path(
+    get,
+    path = "/api/tags",
+    operation_id = "listTags",
+    responses(
+        (status = 200, description = "Tag list with message counts", body = [Tag]),
+        (status = 500, description = "Repository failure", body = ErrorResponse)
+    )
+)]
 #[tracing::instrument]
 pub async fn list(State(state): State<AppState>) -> Result<Json<Vec<Tag>>, AppError> {
     let tags = state.repo.list_tags().await?;

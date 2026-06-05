@@ -12,6 +12,7 @@
   "dependencies": {
     "@solidjs/router": "^0.15.4",
     "@tanstack/solid-query": "^5.100.14",
+    "openapi-fetch": "^0.17.0",
     "solid-js": "^1.9.9"
   },
   "devDependencies": {

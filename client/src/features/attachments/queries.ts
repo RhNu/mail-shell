@@ -1,6 +1,6 @@
 import { createQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
-import { downloadAttachment } from '../api';
+import { downloadAttachment } from './api';
 
 const attachmentsKeys = {
   all: ['attachments'] as const,
@@ -11,6 +11,6 @@ export function useAttachmentDownload(id: Accessor<string>) {
   return createQuery(() => ({
     queryKey: attachmentsKeys.download(id()),
     queryFn: () => downloadAttachment(id()),
-    enabled: !!id(),
+    enabled: Boolean(id()),
   }));
 }

@@ -6,7 +6,7 @@ use axum::{
 };
 
 use crate::error::AppError;
-use crate::models::{InboundMetadata, InboundResponse};
+use crate::models::{ErrorResponse, InboundMetadata, InboundResponse};
 use crate::routes::AppState;
 
 /// Ingest a raw MIME email via multipart form data.
@@ -16,6 +16,21 @@ use crate::routes::AppState;
 /// - `metadata` — JSON with `from`, `to`, and `headers`.
 ///
 /// On success returns `201 Created` with the generated message ID.
+#[utoipa::path(
+    post,
+    path = "/api/inbound",
+    operation_id = "ingestInboundMessage",
+    request_body(
+        content = crate::api_docs::InboundMultipartRequest,
+        content_type = "multipart/form-data",
+        description = "Raw MIME email plus envelope metadata"
+    ),
+    responses(
+        (status = 201, description = "Inbound message accepted", body = InboundResponse),
+        (status = 400, description = "Bad multipart payload", body = ErrorResponse),
+        (status = 500, description = "Ingest failure", body = ErrorResponse)
+    )
+)]
 #[tracing::instrument(skip(state, multipart))]
 pub async fn handler(
     State(state): State<AppState>,

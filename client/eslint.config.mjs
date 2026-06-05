@@ -8,6 +8,9 @@ const solidTypescriptConfig = solid.configs['flat/typescript'];
 export default [
   js.configs.recommended,
   {
+    ignores: ['src/api/generated/**/*'],
+  },
+  {
     ...solidTypescriptConfig,
     files: ['src/**/*.{ts,tsx}'],
     languageOptions: {

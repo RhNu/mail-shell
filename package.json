@@ -5,18 +5,20 @@
   "packageManager": "pnpm@10.22.0",
   "scripts": {
     "build": "pnpm --filter @mail-shell/client build",
+    "gen:client-api": "node scripts/generate-client-api.mjs",
     "format": "pnpm exec oxfmt --write client worker client/eslint.config.mjs",
     "format:check": "pnpm exec oxfmt --check client worker client/eslint.config.mjs",
     "lint": "pnpm lint:ox && pnpm --filter @mail-shell/client lint",
-    "lint:client": "pnpm exec oxlint client && pnpm --filter @mail-shell/client lint",
+    "lint:client": "pnpm exec oxlint client --ignore-pattern \"client/src/api/generated/**/*\" && pnpm --filter @mail-shell/client lint",
     "lint:worker": "pnpm exec oxlint worker",
-    "lint:ox": "pnpm exec oxlint .",
+    "lint:ox": "pnpm exec oxlint . --ignore-pattern \"client/src/api/generated/**/*\"",
     "typecheck": "pnpm --filter @mail-shell/client check && pnpm --filter @mail-shell/worker check && cargo check --workspace",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck",
     "build:client": "pnpm --filter @mail-shell/client build",
     "check:worker": "pnpm --filter @mail-shell/worker check"
   },
   "devDependencies": {
+    "openapi-typescript": "^7.13.0",
     "oxfmt": "^0.53.0",
     "oxlint": "^1.68.0"
   }

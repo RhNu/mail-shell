@@ -3,9 +3,10 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use serde_json::json;
 
-use crate::{repository::RepositoryError, services::inbound::InboundServiceError};
+use crate::{
+    models::ErrorResponse, repository::RepositoryError, services::inbound::InboundServiceError,
+};
 
 /// Central application error type.
 ///
@@ -56,7 +57,7 @@ impl IntoResponse for AppError {
             }
         };
 
-        let body = Json(json!({ "error": message }));
+        let body = Json(ErrorResponse { error: message });
         (status, body).into_response()
     }
 }

@@ -3,6 +3,7 @@
 //! Provides the core backend modules: database management, MIME parsing,
 //! request routing, file storage, error handling, and data models.
 
+pub mod api_docs;
 pub mod error;
 pub mod mime_parser;
 pub mod models;

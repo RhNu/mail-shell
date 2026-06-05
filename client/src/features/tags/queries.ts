@@ -1,5 +1,5 @@
 import { createQuery } from '@tanstack/solid-query';
-import { listTags } from '../api';
+import { listTags } from './api';
 
 const tagsKeys = {
   all: ['tags'] as const,
@@ -9,6 +9,6 @@ const tagsKeys = {
 export function useTagsList() {
   return createQuery(() => ({
     queryKey: tagsKeys.list(),
-    queryFn: () => listTags(),
+    queryFn: listTags,
   }));
 }

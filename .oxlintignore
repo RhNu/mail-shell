@@ -2,3 +2,6 @@ node_modules
 target
 data
 client/dist
+client/src/api/generated
+client/src/api/generated/*
+client/src/api/generated/**/*

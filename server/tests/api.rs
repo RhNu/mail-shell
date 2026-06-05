@@ -54,6 +54,31 @@ async fn test_healthz() {
 }
 
 #[tokio::test]
+async fn test_openapi_document_exposes_core_routes() {
+    let (state, _data_dir) = setup().await;
+    let app = router(state);
+
+    let req = Request::builder()
+        .uri("/api-docs/openapi.json")
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let paths = json["paths"].as_object().unwrap();
+
+    assert!(paths.contains_key("/api/healthz"));
+    assert!(paths.contains_key("/api/inbound"));
+    assert!(paths.contains_key("/api/messages"));
+    assert!(paths.contains_key("/api/messages/{id}"));
+    assert!(paths.contains_key("/api/attachments/{id}"));
+    assert!(paths.contains_key("/api/tags"));
+}
+
+#[tokio::test]
 async fn test_full_inbound_and_read_roundtrip() {
     let (state, _data_dir) = setup().await;
     let app = router(state.clone());

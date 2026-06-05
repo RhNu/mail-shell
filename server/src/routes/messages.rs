@@ -5,7 +5,7 @@ use axum::{
 use serde::Deserialize;
 
 use crate::error::AppError;
-use crate::models::{MessageDetailResponse, MessageSummary, Paginated};
+use crate::models::{ErrorResponse, MessageDetailResponse, MessageListResponse};
 use crate::repository::ListMessagesQuery;
 use crate::routes::AppState;
 
@@ -18,11 +18,25 @@ pub struct ListQuery {
 }
 
 /// List messages with optional tag filtering and pagination.
+#[utoipa::path(
+    get,
+    path = "/api/messages",
+    operation_id = "listMessages",
+    params(
+        ("page" = Option<u32>, Query, description = "1-based page number"),
+        ("limit" = Option<u32>, Query, description = "Page size between 1 and 100"),
+        ("tag" = Option<i64>, Query, description = "Filter by tag id")
+    ),
+    responses(
+        (status = 200, description = "Paginated message list", body = MessageListResponse),
+        (status = 500, description = "Repository failure", body = ErrorResponse)
+    )
+)]
 #[tracing::instrument(skip(state))]
 pub async fn list(
     State(state): State<AppState>,
     Query(query): Query<ListQuery>,
-) -> Result<Json<Paginated<MessageSummary>>, AppError> {
+) -> Result<Json<MessageListResponse>, AppError> {
     let page = query.page.unwrap_or(1).max(1);
     let limit = query.limit.unwrap_or(20).clamp(1, 100);
     let offset = (page - 1) as i64 * limit as i64;
@@ -43,7 +57,7 @@ pub async fn list(
         item_count = page_data.items.len(),
         "listed messages"
     );
-    Ok(Json(Paginated {
+    Ok(Json(MessageListResponse {
         items: page_data.items,
         total: page_data.total,
         page,
@@ -52,6 +66,17 @@ pub async fn list(
 }
 
 /// Retrieve the full details of a single message, including its attachments.
+#[utoipa::path(
+    get,
+    path = "/api/messages/{id}",
+    operation_id = "getMessageDetail",
+    params(("id" = String, Path, description = "Message id")),
+    responses(
+        (status = 200, description = "Full message detail", body = MessageDetailResponse),
+        (status = 404, description = "Message not found", body = ErrorResponse),
+        (status = 500, description = "Repository failure", body = ErrorResponse)
+    )
+)]
 #[tracing::instrument(skip(state))]
 pub async fn detail(
     State(state): State<AppState>,

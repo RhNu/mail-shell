@@ -5,12 +5,28 @@ use axum::{
 };
 
 use crate::error::AppError;
+use crate::models::ErrorResponse;
 use crate::routes::AppState;
 
 /// Download an attachment by its ID.
 ///
 /// Returns the file bytes with `Content-Type` and `Content-Disposition`
 /// headers inferred from the database record.
+#[utoipa::path(
+    get,
+    path = "/api/attachments/{id}",
+    operation_id = "downloadAttachment",
+    params(("id" = String, Path, description = "Attachment id")),
+    responses(
+        (
+            status = 200,
+            description = "Attachment bytes",
+            content_type = "application/octet-stream"
+        ),
+        (status = 404, description = "Attachment not found", body = ErrorResponse),
+        (status = 500, description = "Storage or repository failure", body = ErrorResponse)
+    )
+)]
 #[tracing::instrument]
 pub async fn download(
     State(state): State<AppState>,
