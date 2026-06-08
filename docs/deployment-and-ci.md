@@ -53,5 +53,11 @@ The server container expects:
 - `MAIL_SHELL_HOST`
 - `MAIL_SHELL_PORT`
 - `MAIL_SHELL_DATA_DIR`
+- `MAIL_SHELL_NOTIFIER` (default: `disabled`)
+- `MAIL_SHELL_BARK_SERVER_URL` (when notifier=bark)
+- `MAIL_SHELL_BARK_KEY` (required when notifier=bark)
+- `MAIL_SHELL_BARK_GROUP` (optional)
+- `MAIL_SHELL_BARK_SOUND` (optional)
+- `MAIL_SHELL_BARK_LEVEL` (optional)
 
 The image should mount durable storage at the data directory for SQLite, raw MIME files, and attachments.

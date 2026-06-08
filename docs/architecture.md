@@ -58,3 +58,14 @@ This keeps filtering simple while preserving structured data for future expansio
 - The client uses hash routing, so deep-link fallback handling is unnecessary.
 - The server serves the compiled `client/dist` directory as static assets.
 
+## Notification Model
+
+On successful mail ingest, the server can push a notification through a pluggable notifier:
+
+- `Notifier` trait (`services/notifier.rs`) abstracts the push backend.
+- `NoopNotifier` is the default (notifications disabled).
+- `BarkNotifier` (`services/bark.rs`) sends push notifications via the Bark HTTP API (iOS).
+- The notifier is selected at startup via `MAIL_SHELL_NOTIFIER` (env: `disabled` / `bark`).
+- Notification is fire-and-forget: ingest succeeds even if the push fails. Errors are logged at warn level.
+- Additional notifier backends can be added by implementing the `Notifier` trait and wiring them in `main.rs`.
+
