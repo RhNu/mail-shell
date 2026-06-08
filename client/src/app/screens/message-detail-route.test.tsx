@@ -89,12 +89,12 @@ describe('MessageDetailRoute', () => {
 
     const view = renderRoute();
 
-    expect(screen.getByRole('button', { name: 'Load remote resources' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '加载远程资源' })).toBeInTheDocument();
     expect(view.container.querySelector('img')).toBeNull();
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Load remote resources' }));
+    await fireEvent.click(screen.getByRole('button', { name: '加载远程资源' }));
 
-    expect(screen.queryByRole('button', { name: 'Load remote resources' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '加载远程资源' })).not.toBeInTheDocument();
     expect(view.container.querySelector('img')?.getAttribute('src')).toBe(
       'https://tracker.test/pixel.png',
     );
@@ -106,7 +106,7 @@ describe('MessageDetailRoute', () => {
     renderRoute();
 
     expect(screen.getByText('offline')).toBeInTheDocument();
-    expect(screen.queryByText('Message not found')).not.toBeInTheDocument();
+    expect(screen.queryByText('邮件未找到')).not.toBeInTheDocument();
   });
 
   it('renders the not-found state for 404 responses', () => {
@@ -114,7 +114,7 @@ describe('MessageDetailRoute', () => {
 
     renderRoute();
 
-    expect(screen.getByText('Message not found')).toBeInTheDocument();
+    expect(screen.getByText('邮件未找到')).toBeInTheDocument();
     expect(screen.queryByText('message missing')).not.toBeInTheDocument();
   });
 });
