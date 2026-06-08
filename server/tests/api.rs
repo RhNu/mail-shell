@@ -155,7 +155,7 @@ async fn test_full_inbound_and_read_roundtrip() {
 
 #[tokio::test]
 async fn test_message_headers_endpoint() {
-    let (state, _data_dir) = setup().await;
+    let (state, data_dir) = setup().await;
     let app = router(state.clone());
 
     let raw = b"From: sender@example.com\r\nTo: recipient@example.com\r\nSubject: Hello Headers\r\nMessage-ID: <headers-test@example.com>\r\nContent-Type: text/plain\r\n\r\nBody";
@@ -178,21 +178,45 @@ async fn test_message_headers_endpoint() {
     let inbound_resp: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
     let msg_id = inbound_resp["id"].as_str().unwrap();
 
+    tokio::fs::remove_file(data_dir.join("raw").join(format!("{msg_id}.eml")))
+        .await
+        .unwrap();
+
+    let req = Request::builder()
+        .uri(format!("/api/messages/{msg_id}"))
+        .body(Body::empty())
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body_bytes = res.into_body().collect().await.unwrap().to_bytes();
+    let detail: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    assert_eq!(detail["body_text"], "Body");
+
     let req = Request::builder()
         .uri(format!("/api/messages/{msg_id}/headers"))
         .body(Body::empty())
         .unwrap();
-    let res = app.oneshot(req).await.unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::OK);
 
     let body_bytes = res.into_body().collect().await.unwrap().to_bytes();
     let headers_resp: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
     let headers = headers_resp["headers"].as_array().unwrap();
-    let names: Vec<&str> = headers.iter().map(|h| h["name"].as_str().unwrap()).collect();
+    let names: Vec<&str> = headers
+        .iter()
+        .map(|h| h["name"].as_str().unwrap())
+        .collect();
     assert!(names.contains(&"From"));
     assert!(names.contains(&"To"));
     assert!(names.contains(&"Subject"));
     assert!(names.contains(&"Message-ID"));
+
+    let req = Request::builder()
+        .uri(format!("/api/messages/{msg_id}/raw"))
+        .body(Body::empty())
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
 }
 
 #[tokio::test]

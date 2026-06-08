@@ -1,13 +1,25 @@
 use async_trait::async_trait;
 
+use crate::mime_parser::ParsedMailSnapshotV1;
 use crate::models::{
-    AttachmentDownloadMeta, AttachmentMeta, MessageDetail, MessageRawMeta, MessageSummary, Tag,
+    AttachmentDownloadMeta, AttachmentMeta, HeaderEntry, MessageDetail, MessageRawMeta,
+    MessageSummary, Tag,
 };
 
 #[derive(Debug, thiserror::Error)]
 pub enum RepositoryError {
     #[error("database error: {0}")]
     Db(#[from] ::sqlx::Error),
+    #[error("message {message_id} contains invalid parsed snapshot data: {reason}")]
+    InvalidSnapshotData { message_id: String, reason: String },
+    #[error("message {message_id} contains invalid parsed snapshot JSON: {source}")]
+    InvalidSnapshot {
+        message_id: String,
+        #[source]
+        source: serde_json::Error,
+    },
+    #[error("message {message_id} uses unsupported parsed snapshot version {version}")]
+    UnsupportedSnapshotVersion { message_id: String, version: i64 },
 }
 
 #[derive(Debug, Clone)]
@@ -56,13 +68,9 @@ pub struct InboundMessageRecord {
     pub to_name: Option<String>,
     pub to_address: Option<String>,
     pub envelope_to: String,
-    pub cc: Option<String>,
-    pub reply_to: Option<String>,
-    pub in_reply_to: Option<String>,
     pub date: Option<String>,
     pub raw_path: String,
-    pub body_text: Option<String>,
-    pub body_html: Option<String>,
+    pub snapshot: ParsedMailSnapshotV1,
     pub attachments: Vec<InboundAttachmentRecord>,
     pub tags: Vec<InboundTagRecord>,
 }
@@ -77,6 +85,11 @@ pub trait Repository: Send + Sync {
     ) -> Result<MessagePage<MessageSummary>, RepositoryError>;
 
     async fn get_message(&self, id: &str) -> Result<Option<MessageRecord>, RepositoryError>;
+
+    async fn get_message_headers(
+        &self,
+        id: &str,
+    ) -> Result<Option<Vec<HeaderEntry>>, RepositoryError>;
 
     async fn get_attachment_download(
         &self,

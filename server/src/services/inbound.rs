@@ -52,7 +52,7 @@ impl InboundMessageService {
             let raw_path = storage::save_raw(&self.data_dir, &message_id, &raw_mime).await?;
             written_paths.push(raw_path.clone());
 
-            let parsed = parse_message(&raw_mime)?;
+            let mut parsed = parse_message(&raw_mime)?;
             tracing::debug!(
                 subject = %parsed.subject,
                 parsed_attachment_count = parsed.attachments.len(),
@@ -62,8 +62,11 @@ impl InboundMessageService {
             );
 
             let mut attachments = Vec::with_capacity(parsed.attachments.len());
-            for attachment in parsed.attachments {
+            for attachment in std::mem::take(&mut parsed.attachments) {
                 let attachment_id = storage::generate_id();
+                parsed
+                    .snapshot
+                    .bind_attachment_id(attachment.part_id, attachment_id.clone())?;
                 let path =
                     storage::save_attachment(&self.data_dir, &attachment_id, &attachment.body)
                         .await?;
@@ -101,13 +104,9 @@ impl InboundMessageService {
                 to_name,
                 to_address,
                 envelope_to: metadata.envelope_to,
-                cc: addresses_to_json(&parsed.cc),
-                reply_to: addresses_to_json(&parsed.reply_to),
-                in_reply_to: parsed.in_reply_to,
                 date: parsed.date,
                 raw_path: raw_path.to_string_lossy().into_owned(),
-                body_text: parsed.body_text,
-                body_html: parsed.body_html,
+                snapshot: parsed.snapshot,
                 attachments,
                 tags,
             };
@@ -154,13 +153,6 @@ fn first_address_fields(addrs: &[MailAddress]) -> (Option<String>, Option<String
         Some(a) => (a.name.clone(), a.address.clone()),
         None => (None, None),
     }
-}
-
-fn addresses_to_json(addrs: &[MailAddress]) -> Option<String> {
-    if addrs.is_empty() {
-        return None;
-    }
-    serde_json::to_string(addrs).ok()
 }
 
 fn derive_tags(envelope_to: &str, from: &[MailAddress]) -> Vec<InboundTagRecord> {

@@ -15,24 +15,30 @@ vi.mock('../features/messages/queries', () => ({
   useMessageHeaders: () => headersQueryState.value,
 }));
 
-describe('RawHeadersDialog', () => {
-  beforeEach(() => {
-    headersQueryState.value = {
-      isLoading: false,
-      isError: false,
-      error: undefined,
-      data: undefined,
-    };
-  });
+function resetHeadersQuery() {
+  headersQueryState.value = {
+    isLoading: false,
+    isError: false,
+    error: undefined,
+    data: undefined,
+  };
+}
 
-  afterEach(() => {
-    cleanup();
-  });
+function renderDialog(open = true, onClose = () => {}) {
+  render(() => <RawHeadersDialog messageId="msg-1" open={open} onClose={onClose} />);
+}
 
+beforeEach(() => {
+  resetHeadersQuery();
+});
+
+afterEach(() => {
+  cleanup();
+});
+
+describe('RawHeadersDialog visibility', () => {
   it('renders nothing when closed', () => {
-    render(() => (
-      <RawHeadersDialog messageId="msg-1" open={false} onClose={() => {}} />
-    ));
+    renderDialog(false);
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
@@ -50,16 +56,16 @@ describe('RawHeadersDialog', () => {
       },
     };
 
-    render(() => (
-      <RawHeadersDialog messageId="msg-1" open={true} onClose={() => {}} />
-    ));
+    renderDialog();
 
     expect(screen.getByText('From')).toBeInTheDocument();
     expect(screen.getByText('sender@example.com')).toBeInTheDocument();
     expect(screen.getByText('Subject')).toBeInTheDocument();
     expect(screen.getByText('Hello')).toBeInTheDocument();
   });
+});
 
+describe('RawHeadersDialog query states', () => {
   it('shows a loading indicator while fetching', () => {
     headersQueryState.value = {
       isLoading: true,
@@ -68,9 +74,7 @@ describe('RawHeadersDialog', () => {
       data: undefined,
     };
 
-    render(() => (
-      <RawHeadersDialog messageId="msg-1" open={true} onClose={() => {}} />
-    ));
+    renderDialog();
 
     expect(screen.getByText('加载中…')).toBeInTheDocument();
   });
@@ -83,13 +87,13 @@ describe('RawHeadersDialog', () => {
       data: undefined,
     };
 
-    render(() => (
-      <RawHeadersDialog messageId="msg-1" open={true} onClose={() => {}} />
-    ));
+    renderDialog();
 
     expect(screen.getByText('加载失败')).toBeInTheDocument();
   });
+});
 
+describe('RawHeadersDialog actions', () => {
   it('calls onClose when close button is clicked', async () => {
     const onClose = vi.fn();
     headersQueryState.value = {
@@ -99,7 +103,7 @@ describe('RawHeadersDialog', () => {
       data: { headers: [{ name: 'From', value: 'a@b.com' }] },
     };
 
-    render(() => <RawHeadersDialog messageId="msg-1" open={true} onClose={onClose} />);
+    renderDialog(true, onClose);
 
     await fireEvent.click(screen.getByRole('button', { name: '关闭' }));
     expect(onClose).toHaveBeenCalled();

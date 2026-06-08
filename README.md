@@ -19,7 +19,7 @@ Email → Cloudflare → Worker → POST /api/inbound → Server (SQLite + files
 ```
 
 - Worker forwards raw MIME and envelope metadata via multipart POST.
-- Server persists raw `.eml` files, parses message fields and attachments, writes SQLite indexes.
+- Server persists raw `.eml` files for download, parses each message once, stores searchable indexes plus a versioned parsed snapshot in SQLite, and stores attachments as separate blobs.
 - Classification is modeled as system tags (kind/value/label), not free-form folders.
 - On successful ingest, the server can push a notification through the configured notifier.
 - The client uses hash routing; the server serves `client/dist` as static assets.
@@ -167,9 +167,13 @@ Full CI details: [`docs/deployment-and-ci.md`](docs/deployment-and-ci.md).
 | POST | `/api/inbound` | Ingest raw MIME + metadata (multipart) |
 | GET | `/api/messages` | Paginated message list, optional tag filter |
 | GET | `/api/messages/{id}` | Full message detail + attachments |
+| GET | `/api/messages/{id}/headers` | Parsed top-level message headers from the stored snapshot |
+| GET | `/api/messages/{id}/raw` | Raw EML download |
 | GET | `/api/attachments/{id}` | Binary attachment download |
 | GET | `/api/tags` | All tags with message counts |
 | GET | `/api-docs/openapi.json` | OpenAPI spec |
+
+The current database schema is a destructive development schema. Clear the configured `MAIL_SHELL_DATA_DIR` before deploying this version over an older local database.
 
 ## Documentation
 

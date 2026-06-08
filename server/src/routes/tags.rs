@@ -54,13 +54,13 @@ mod tests {
                 to_name: None,
                 to_address: Some("to@example.com".to_string()),
                 envelope_to: "to@example.com".to_string(),
-                cc: None,
-                reply_to: None,
-                in_reply_to: None,
                 date: Some("2024-01-01T00:00:00+00:00".to_string()),
                 raw_path: "/tmp/raw.msg".to_string(),
-                body_text: None,
-                body_html: None,
+                snapshot: crate::mime_parser::parse_message(
+                    b"From: from@example.com\r\nTo: to@example.com\r\nSubject: Test\r\nContent-Type: text/plain\r\n\r\nBody",
+                )
+                .unwrap()
+                .snapshot,
                 attachments: Vec::new(),
                 tags: vec![InboundTagRecord {
                     kind: "recipient_address".to_string(),

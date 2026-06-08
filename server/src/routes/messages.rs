@@ -7,8 +7,9 @@ use axum::{
 use serde::Deserialize;
 
 use crate::error::AppError;
-use crate::mime_parser::parse_raw_headers;
-use crate::models::{ErrorResponse, HeaderEntry, MessageDetailResponse, MessageHeadersResponse, MessageListResponse};
+use crate::models::{
+    ErrorResponse, MessageDetailResponse, MessageHeadersResponse, MessageListResponse,
+};
 use crate::repository::ListMessagesQuery;
 use crate::routes::AppState;
 
@@ -166,7 +167,7 @@ pub async fn raw_download(
     operation_id = "getMessageHeaders",
     params(("id" = String, Path, description = "Message id")),
     responses(
-        (status = 200, description = "Raw EML headers", body = MessageHeadersResponse),
+        (status = 200, description = "Parsed message headers from the persisted snapshot", body = MessageHeadersResponse),
         (status = 404, description = "Message not found", body = ErrorResponse),
         (status = 500, description = "Storage or repository failure", body = ErrorResponse)
     )
@@ -176,30 +177,19 @@ pub async fn headers(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<MessageHeadersResponse>, AppError> {
-    let message = state
+    let headers = state
         .repo
-        .get_message_raw(&id)
+        .get_message_headers(&id)
         .await?
         .ok_or(AppError::NotFound)?;
 
-    let bytes = tokio::fs::read(&message.raw_path).await?;
-    let parsed = parse_raw_headers(&bytes)?;
-
     tracing::debug!(
         message_id = %id,
-        header_count = parsed.len(),
+        header_count = headers.len(),
         "retrieved message headers"
     );
 
-    Ok(Json(MessageHeadersResponse {
-        headers: parsed
-            .into_iter()
-            .map(|h| HeaderEntry {
-                name: h.name,
-                value: h.value,
-            })
-            .collect(),
-    }))
+    Ok(Json(MessageHeadersResponse { headers }))
 }
 
 #[cfg(test)]
@@ -227,6 +217,9 @@ mod tests {
 
     async fn insert_messages(repo: &dyn crate::repository::Repository, n: usize) {
         for i in 0..n {
+            let raw = format!(
+                "From: from@example.com\r\nTo: to@example.com\r\nSubject: Subject {i}\r\nMessage-ID: <msg-{i}>\r\nContent-Type: text/plain\r\n\r\nBody"
+            );
             repo.ingest_message(InboundMessageRecord {
                 id: format!("msg-{i}"),
                 message_id: Some(format!("<msg-{i}>")),
@@ -236,13 +229,11 @@ mod tests {
                 to_name: None,
                 to_address: Some("to@example.com".to_string()),
                 envelope_to: "to@example.com".to_string(),
-                cc: None,
-                reply_to: None,
-                in_reply_to: None,
                 date: Some("2024-01-01T00:00:00+00:00".to_string()),
                 raw_path: format!("/tmp/{i}.eml"),
-                body_text: None,
-                body_html: None,
+                snapshot: crate::mime_parser::parse_message(raw.as_bytes())
+                    .unwrap()
+                    .snapshot,
                 attachments: Vec::new(),
                 tags: Vec::new(),
             })
@@ -282,13 +273,13 @@ mod tests {
                 to_name: None,
                 to_address: Some("to@example.com".to_string()),
                 envelope_to: "to@example.com".to_string(),
-                cc: None,
-                reply_to: None,
-                in_reply_to: None,
                 date: Some("2024-01-01T00:00:00+00:00".to_string()),
                 raw_path: "/tmp/tagged.eml".to_string(),
-                body_text: None,
-                body_html: None,
+                snapshot: crate::mime_parser::parse_message(
+                    b"From: from@example.com\r\nTo: to@example.com\r\nSubject: Tagged\r\nMessage-ID: <msg-tagged>\r\nContent-Type: text/plain\r\n\r\nBody",
+                )
+                .unwrap()
+                .snapshot,
                 attachments: Vec::new(),
                 tags: vec![InboundTagRecord {
                     kind: "recipient_address".to_string(),

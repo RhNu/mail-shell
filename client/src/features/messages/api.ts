@@ -1,7 +1,12 @@
 import { apiClient } from '../../api/core/client';
 import { resolveApiBaseUrl } from '../../api/core/config';
 import { executeJson } from '../../api/core/response';
-import type { MessageDetailResponse, MessageHeadersResponse, MessageListQuery, MessageListResponse } from './models';
+import type {
+  MessageDetailResponse,
+  MessageHeadersResponse,
+  MessageListQuery,
+  MessageListResponse,
+} from './models';
 
 export function listMessages(query: MessageListQuery = {}): Promise<MessageListResponse> {
   return executeJson(

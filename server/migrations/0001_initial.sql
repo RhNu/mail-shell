@@ -7,13 +7,10 @@ CREATE TABLE messages (
     to_name TEXT,
     to_address TEXT,
     envelope_to TEXT NOT NULL,
-    cc TEXT,
-    reply_to TEXT,
-    in_reply_to TEXT,
     date TEXT,
     raw_path TEXT NOT NULL,
-    body_text TEXT,
-    body_html TEXT,
+    snapshot_version INTEGER NOT NULL,
+    parsed_snapshot TEXT NOT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

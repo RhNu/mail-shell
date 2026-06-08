@@ -21,7 +21,7 @@ pub struct MessageSummary {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, sqlx::FromRow, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct MessageDetail {
     pub id: String,
     pub from_name: Option<String>,

@@ -15,6 +15,16 @@ fn sample_metadata() -> InboundMetadata {
 }
 
 fn sample_record(id: &str, attachment_id: &str, message_id: &str) -> InboundMessageRecord {
+    let raw = format!(
+        "From: sender@example.com\r\nTo: recipient@example.com\r\nSubject: Hello\r\nMessage-ID: {message_id}\r\nContent-Type: multipart/mixed; boundary=\"boundary123\"\r\n\r\n--boundary123\r\nContent-Type: text/plain\r\n\r\nBody\r\n--boundary123\r\nContent-Type: text/plain\r\nContent-Disposition: attachment; filename=\"hello.txt\"\r\n\r\ntext\r\n--boundary123--"
+    );
+    let mut parsed = mail_shell_server::mime_parser::parse_message(raw.as_bytes()).unwrap();
+    let part_id = parsed.attachments[0].part_id;
+    parsed
+        .snapshot
+        .bind_attachment_id(part_id, attachment_id.to_string())
+        .unwrap();
+
     InboundMessageRecord {
         id: id.to_string(),
         message_id: Some(message_id.to_string()),
@@ -24,13 +34,9 @@ fn sample_record(id: &str, attachment_id: &str, message_id: &str) -> InboundMess
         to_name: None,
         to_address: Some("recipient@example.com".to_string()),
         envelope_to: "recipient@example.com".to_string(),
-        cc: None,
-        reply_to: None,
-        in_reply_to: None,
         date: Some("2024-01-01T00:00:00+00:00".to_string()),
         raw_path: format!("/tmp/{id}.eml"),
-        body_text: Some("Body".to_string()),
-        body_html: None,
+        snapshot: parsed.snapshot,
         attachments: vec![InboundAttachmentRecord {
             id: attachment_id.to_string(),
             filename: Some("hello.txt".to_string()),

@@ -19,7 +19,7 @@ The runtime intentionally stays small:
 1. Cloudflare routes an incoming email to the Worker.
 2. The Worker serializes the raw MIME payload and minimal envelope metadata.
 3. The Worker sends `POST /api/inbound` to the server using Cloudflare Access service-token headers.
-4. The server persists the raw MIME file, parses message fields and attachments, writes SQLite indexes, and exposes the result through `/api/*`.
+4. The server persists the raw MIME file, parses the message once, writes searchable indexes plus a versioned attachment-free parsed snapshot to SQLite, writes attachment blobs to disk, and exposes the result through `/api/*`.
 5. The client reads `/api/messages`, `/api/messages/:id`, `/api/tags`, and attachment download endpoints.
 
 ## Storage Model
@@ -27,14 +27,19 @@ The runtime intentionally stays small:
 Blob data stays out of SQLite:
 
 - SQLite stores searchable metadata and relationships.
-- Raw MIME files are written to the server data directory.
+- SQLite also stores a versioned parsed-mail snapshot for each message. The snapshot preserves ordered headers and non-attachment MIME structure; attachment nodes contain metadata and attachment ids but not attachment bytes.
+- Raw MIME files are written to the server data directory for archive/download only.
 - Attachments are written to the server data directory.
+
+Message detail and header APIs read the persisted SQLite snapshot. They do not read or re-parse the raw `.eml` file. The raw file is only read by the raw-download endpoint.
 
 Expected logical tables:
 
 - `messages`
 - `attachments`
 - `message_tags`
+
+The current schema is intentionally destructive from earlier development versions. Existing data directories must be cleared before deploying this schema.
 
 ## Classification Model
 

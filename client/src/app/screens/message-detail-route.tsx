@@ -159,6 +159,47 @@ function MessageDetailContent(props: {
   );
 }
 
+function BackToInboxLink() {
+  return (
+    <a
+      href="#/"
+      class="inline-flex w-fit items-center gap-1.5 text-sm text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+    >
+      <ArrowLeft size={16} /> 返回收件箱
+    </a>
+  );
+}
+
+function MessageDetailError(props: {
+  query: ReturnType<typeof useMessageDetail>;
+  notFound: boolean;
+}) {
+  return (
+    <Show when={props.query.isError && !props.notFound}>
+      <ErrorBanner
+        message={props.query.error?.message ?? '加载邮件失败'}
+        onRetry={() => props.query.refetch()}
+      />
+    </Show>
+  );
+}
+
+function MessageHeadersDialogMount(props: {
+  query: ReturnType<typeof useMessageDetail>;
+  open: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <Show when={props.query.data}>
+      <RawHeadersDialog
+        messageId={props.query.data!.id}
+        open={props.open}
+        onClose={props.onClose}
+      />
+    </Show>
+  );
+}
+
 export function MessageDetailRoute() {
   const params = useParams<{ messageId: string }>();
   const query = useMessageDetail(() => params.messageId);
@@ -185,18 +226,8 @@ export function MessageDetailRoute() {
 
   return (
     <section aria-labelledby="message-detail-heading" class="flex flex-col gap-6">
-      <a
-        href="#/"
-        class="inline-flex w-fit items-center gap-1.5 text-sm text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-      >
-        <ArrowLeft size={16} /> 返回收件箱
-      </a>
-      {query.isError && !isNotFound() && (
-        <ErrorBanner
-          message={query.error?.message ?? '加载邮件失败'}
-          onRetry={() => query.refetch()}
-        />
-      )}
+      <BackToInboxLink />
+      <MessageDetailError query={query} notFound={isNotFound()} />
       <MessageDetailContent
         query={query}
         html={() => sanitizedHtml().html}
@@ -206,13 +237,11 @@ export function MessageDetailRoute() {
         onLoadRemoteResources={() => setAllowRemoteResources(true)}
         onViewHeaders={() => setShowHeadersDialog(true)}
       />
-      <Show when={query.data}>
-        <RawHeadersDialog
-          messageId={query.data!.id}
-          open={showHeadersDialog()}
-          onClose={() => setShowHeadersDialog(false)}
-        />
-      </Show>
+      <MessageHeadersDialogMount
+        query={query}
+        open={showHeadersDialog()}
+        onClose={() => setShowHeadersDialog(false)}
+      />
     </section>
   );
 }
