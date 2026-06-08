@@ -8,6 +8,7 @@
     "build": "vite build",
     "check": "tsc --noEmit",
     "lint": "eslint --max-warnings 0 --config eslint.config.mjs \"src/**/*.{ts,tsx}\"",
+    "pwa:assets": "pwa-assets-generator --config pwa-assets.config.ts",
     "test": "vitest run"
   },
   "dependencies": {
