@@ -11,7 +11,7 @@ export const pwaOptions = {
     name: 'Mail Shell',
     short_name: 'Mail Shell',
     description: 'Small mail-ingest web UI',
-    theme_color: '#0ea5e9',
+    theme_color: '#111111',
     background_color: '#ffffff',
     display: 'standalone',
     start_url: '/',
@@ -43,7 +43,7 @@ export const pwaOptions = {
     globPatterns: ['**/*.{js,css,svg,png,ico}'],
     navigateFallback: undefined,
   },
-  includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'apple-touch-icon-180x180.png'],
+  includeAssets: ['favicon.svg', 'apple-touch-icon-180x180.png'],
 } satisfies Partial<VitePWAOptions>;
 
 const pwaPlugin = VitePWA(pwaOptions);
