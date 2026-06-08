@@ -2,7 +2,9 @@ use std::{env, net::SocketAddr, path::PathBuf, sync::Arc};
 
 use axum::{Router, http::HeaderValue};
 use mail_shell_server::repository::sqlx::SqlxRepository;
+use mail_shell_server::services::bark::BarkConfig;
 use mail_shell_server::services::inbound::InboundMessageService;
+use mail_shell_server::services::notifier::{NoopNotifier, Notifier};
 use mail_shell_server::{routes, storage};
 use tower::Layer;
 use tower_http::{services::ServeDir, set_header::SetResponseHeaderLayer, trace::TraceLayer};
@@ -35,11 +37,45 @@ async fn main() {
             .await
             .expect("failed to initialize database"),
     );
-    let inbound_service = Arc::new(InboundMessageService::new(repo.clone(), data_dir.clone()));
+
+    let notifier: Arc<dyn Notifier> = match env::var("MAIL_SHELL_NOTIFIER")
+        .unwrap_or_else(|_| "disabled".into())
+        .as_str()
+    {
+        "bark" => {
+            let server_url =
+                env::var("MAIL_SHELL_BARK_SERVER_URL").unwrap_or_else(|_| "https://api.day.app".into());
+            let key = env::var("MAIL_SHELL_BARK_KEY")
+                .expect("MAIL_SHELL_BARK_KEY is required when MAIL_SHELL_NOTIFIER=bark");
+            let group = env::var("MAIL_SHELL_BARK_GROUP").ok();
+            let sound = env::var("MAIL_SHELL_BARK_SOUND").ok();
+            let level = env::var("MAIL_SHELL_BARK_LEVEL").ok();
+            info!(
+                notifier = "bark",
+                server_url = %server_url,
+                group = ?group,
+                "notifier configured"
+            );
+            Arc::new(mail_shell_server::services::bark::BarkNotifier::new(BarkConfig {
+                server_url,
+                key,
+                group,
+                sound,
+                level,
+            }))
+        }
+        _ => {
+            info!(notifier = "disabled", "notifier configured");
+            Arc::new(NoopNotifier)
+        }
+    };
+
+    let inbound_service = Arc::new(InboundMessageService::new(repo.clone(), data_dir.clone(), notifier.clone()));
 
     let state = routes::AppState {
         repo,
         inbound_service,
+        notifier,
     };
 
     let assets_dir = PathBuf::from("client/dist");

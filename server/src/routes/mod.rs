@@ -7,6 +7,7 @@ use axum::{
 
 use crate::repository::Repository;
 use crate::services::inbound::InboundMessageService;
+use crate::services::notifier::Notifier;
 
 pub mod api_docs;
 pub mod attachments;
@@ -20,6 +21,7 @@ pub mod tags;
 pub struct AppState {
     pub repo: Arc<dyn Repository>,
     pub inbound_service: Arc<InboundMessageService>,
+    pub notifier: Arc<dyn Notifier>,
 }
 
 impl std::fmt::Debug for AppState {

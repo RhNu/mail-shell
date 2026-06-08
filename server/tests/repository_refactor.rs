@@ -6,6 +6,7 @@ use mail_shell_server::repository::{
     sqlx::SqlxRepository,
 };
 use mail_shell_server::services::inbound::InboundMessageService;
+use mail_shell_server::services::notifier::NoopNotifier;
 
 fn sample_metadata(message_id: &str) -> InboundMetadata {
     InboundMetadata {
@@ -116,7 +117,7 @@ async fn aggregate_ingest_rolls_back_on_duplicate_message_id() {
 async fn inbound_service_cleans_up_files_when_repository_write_fails() {
     let temp_dir = tempfile::tempdir().unwrap();
     let repo = Arc::new(SqlxRepository::init_pool_in_memory().await.unwrap());
-    let service = InboundMessageService::new(repo.clone(), temp_dir.path().to_path_buf());
+    let service = InboundMessageService::new(repo.clone(), temp_dir.path().to_path_buf(), Arc::new(NoopNotifier));
 
     let raw = b"From: sender@example.com\r\nTo: recipient@example.com\r\nSubject: Hello\r\nContent-Type: multipart/mixed; boundary=\"boundary123\"\r\n\r\n--boundary123\r\nContent-Type: text/plain\r\n\r\nBody\r\n--boundary123\r\nContent-Type: text/plain\r\nContent-Disposition: attachment; filename=\"hello.txt\"\r\n\r\ntext\r\n--boundary123--";
 

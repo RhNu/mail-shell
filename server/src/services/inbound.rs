@@ -7,6 +7,7 @@ use crate::{
         InboundAttachmentRecord, InboundMessageRecord, InboundTagRecord, Repository,
         RepositoryError,
     },
+    services::notifier::{Notification, Notifier},
     storage,
 };
 
@@ -24,11 +25,20 @@ pub enum InboundServiceError {
 pub struct InboundMessageService {
     repo: Arc<dyn Repository>,
     data_dir: PathBuf,
+    notifier: Arc<dyn Notifier>,
 }
 
 impl InboundMessageService {
-    pub fn new(repo: Arc<dyn Repository>, data_dir: PathBuf) -> Self {
-        Self { repo, data_dir }
+    pub fn new(
+        repo: Arc<dyn Repository>,
+        data_dir: PathBuf,
+        notifier: Arc<dyn Notifier>,
+    ) -> Self {
+        Self {
+            repo,
+            data_dir,
+            notifier,
+        }
     }
 
     #[tracing::instrument(skip(self, raw_mime, metadata))]
@@ -75,6 +85,9 @@ impl InboundMessageService {
 
             let attachment_count = attachments.len();
             let tag_count = tags.len();
+
+            let notify_from = metadata.from.clone();
+            let notify_subject = metadata.headers.subject.clone();
             let record = InboundMessageRecord {
                 id: message_id.clone(),
                 from_address: metadata.from,
@@ -96,6 +109,22 @@ impl InboundMessageService {
                 tag_count,
                 "inbound message ingested"
             );
+
+            let notifier = self.notifier.clone();
+            let msg_id_for_notify = message_id.clone();
+            tokio::spawn(async move {
+                let notification = Notification {
+                    title: "New Mail".to_string(),
+                    body: format!("From: {notify_from}\nSubject: {notify_subject}"),
+                    group: Some("mail-shell".to_string()),
+                    url: None,
+                };
+                match notifier.notify(notification).await {
+                    Ok(()) => tracing::debug!(msg_id = %msg_id_for_notify, "notification sent"),
+                    Err(err) => tracing::warn!(msg_id = %msg_id_for_notify, error = %err, "notification failed"),
+                }
+            });
+
             Ok::<InboundResponse, InboundServiceError>(InboundResponse { id: message_id })
         }
         .await;
@@ -147,6 +176,7 @@ async fn cleanup_files(paths: &[PathBuf]) {
 mod tests {
     use super::*;
     use crate::repository::{ListMessagesQuery, sqlx::SqlxRepository};
+    use crate::services::notifier::NoopNotifier;
 
     fn sample_metadata(message_id: &str) -> InboundMetadata {
         InboundMetadata {
@@ -168,7 +198,8 @@ mod tests {
     async fn ingest_persists_message_and_attachment_files() {
         let temp_dir = tempfile::tempdir().unwrap();
         let repo = Arc::new(SqlxRepository::init_pool_in_memory().await.unwrap());
-        let service = InboundMessageService::new(repo.clone(), temp_dir.path().to_path_buf());
+        let notifier = Arc::new(NoopNotifier) as Arc<dyn Notifier>;
+        let service = InboundMessageService::new(repo.clone(), temp_dir.path().to_path_buf(), notifier);
 
         let response = service
             .ingest(sample_raw_message(), sample_metadata("<msg-1>"))

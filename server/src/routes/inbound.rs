@@ -81,6 +81,7 @@ mod tests {
 
     use crate::repository::sqlx::SqlxRepository;
     use crate::services::inbound::InboundMessageService;
+    use crate::services::notifier::{NoopNotifier, Notifier};
     use axum::body::Body;
     use axum::http::Request;
     use tower::ServiceExt;
@@ -102,12 +103,15 @@ mod tests {
     async fn test_inbound_handler_multipart() {
         let tmp = tempfile::tempdir().unwrap();
         let repo = Arc::new(SqlxRepository::init_pool_in_memory().await.unwrap());
+        let notifier = Arc::new(NoopNotifier) as Arc<dyn Notifier>;
         let state = AppState {
             inbound_service: Arc::new(InboundMessageService::new(
                 repo.clone(),
                 tmp.path().to_path_buf(),
+                notifier.clone(),
             )),
             repo,
+            notifier,
         };
 
         let raw = b"From: sender@example.com\r\nTo: recipient@example.com\r\nSubject: Hello\r\nContent-Type: text/plain\r\n\r\nBody";
@@ -133,12 +137,15 @@ mod tests {
     async fn test_inbound_missing_raw_mime() {
         let tmp = tempfile::tempdir().unwrap();
         let repo = Arc::new(SqlxRepository::init_pool_in_memory().await.unwrap());
+        let notifier = Arc::new(NoopNotifier) as Arc<dyn Notifier>;
         let state = AppState {
             inbound_service: Arc::new(InboundMessageService::new(
                 repo.clone(),
                 tmp.path().to_path_buf(),
+                notifier.clone(),
             )),
             repo,
+            notifier,
         };
 
         let boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW";

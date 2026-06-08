@@ -106,15 +106,19 @@ mod tests {
 
     use crate::repository::{InboundMessageRecord, InboundTagRecord, sqlx::SqlxRepository};
     use crate::services::inbound::InboundMessageService;
+    use crate::services::notifier::{NoopNotifier, Notifier};
 
     async fn setup_state() -> AppState {
         let repo = Arc::new(SqlxRepository::init_pool_in_memory().await.unwrap());
+        let notifier = Arc::new(NoopNotifier) as Arc<dyn Notifier>;
         AppState {
             inbound_service: Arc::new(InboundMessageService::new(
                 repo.clone(),
                 std::path::PathBuf::from("/tmp"),
+                notifier.clone(),
             )),
             repo,
+            notifier,
         }
     }
 

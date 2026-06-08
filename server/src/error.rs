@@ -6,6 +6,7 @@ use axum::{
 
 use crate::{
     models::ErrorResponse, repository::RepositoryError, services::inbound::InboundServiceError,
+    services::notifier::NotifierError,
 };
 
 /// Central application error type.
@@ -22,6 +23,8 @@ pub enum AppError {
     Repo(#[from] RepositoryError),
     #[error(transparent)]
     InboundService(#[from] InboundServiceError),
+    #[error("notifier error: {0}")]
+    Notifier(#[from] NotifierError),
     #[error("bad request: {0}")]
     BadRequest(String),
     #[error("not found")]
@@ -37,6 +40,10 @@ impl IntoResponse for AppError {
             }
             AppError::InboundService(err) => {
                 tracing::error!(error = %err, "inbound service error");
+                (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
+            }
+            AppError::Notifier(err) => {
+                tracing::error!(error = %err, "notifier error");
                 (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
             }
             AppError::Io(err) => {

@@ -6,6 +6,7 @@ use http_body_util::BodyExt;
 use mail_shell_server::repository::sqlx::SqlxRepository;
 use mail_shell_server::routes::{AppState, router};
 use mail_shell_server::services::inbound::InboundMessageService;
+use mail_shell_server::services::notifier::{NoopNotifier, Notifier};
 use mail_shell_server::storage;
 use std::path::PathBuf;
 use tower::ServiceExt;
@@ -28,9 +29,11 @@ async fn setup() -> (AppState, PathBuf) {
     let data_dir = tmp.path().to_path_buf();
     storage::ensure_dirs(&data_dir).unwrap();
     let repo = Arc::new(SqlxRepository::init_pool(&data_dir).await.unwrap());
+    let notifier = Arc::new(NoopNotifier) as Arc<dyn Notifier>;
     let state = AppState {
-        inbound_service: Arc::new(InboundMessageService::new(repo.clone(), data_dir.clone())),
+        inbound_service: Arc::new(InboundMessageService::new(repo.clone(), data_dir.clone(), notifier.clone())),
         repo,
+        notifier,
     };
     (state, data_dir)
 }

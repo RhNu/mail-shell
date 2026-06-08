@@ -28,16 +28,20 @@ mod tests {
 
     use crate::repository::{InboundMessageRecord, InboundTagRecord, sqlx::SqlxRepository};
     use crate::services::inbound::InboundMessageService;
+    use crate::services::notifier::{NoopNotifier, Notifier};
 
     #[tokio::test]
     async fn test_list_tags_with_counts() {
         let repo = Arc::new(SqlxRepository::init_pool_in_memory().await.unwrap());
+        let notifier = Arc::new(NoopNotifier) as Arc<dyn Notifier>;
         let state = AppState {
             inbound_service: Arc::new(InboundMessageService::new(
                 repo.clone(),
                 std::path::PathBuf::from("/tmp"),
+                notifier.clone(),
             )),
             repo,
+            notifier,
         };
 
         state
