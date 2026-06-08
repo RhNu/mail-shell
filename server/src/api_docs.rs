@@ -2,8 +2,8 @@ use axum::Json;
 use utoipa::OpenApi;
 
 use crate::models::{
-    AttachmentMeta, ErrorResponse, InboundMetadata, InboundResponse, MessageDetail,
-    MessageDetailResponse, MessageListResponse, MessageSummary, Tag,
+    AttachmentMeta, ErrorResponse, HeaderEntry, InboundMetadata, InboundResponse, MessageDetail,
+    MessageDetailResponse, MessageHeadersResponse, MessageListResponse, MessageSummary, Tag,
 };
 
 #[allow(dead_code)]
@@ -22,17 +22,20 @@ pub(crate) struct InboundMultipartRequest {
         crate::routes::messages::list,
         crate::routes::messages::detail,
         crate::routes::messages::raw_download,
+        crate::routes::messages::headers,
         crate::routes::attachments::download,
         crate::routes::tags::list,
     ),
     components(schemas(
         AttachmentMeta,
         ErrorResponse,
+        HeaderEntry,
         InboundMetadata,
         InboundMultipartRequest,
         InboundResponse,
         MessageDetail,
         MessageDetailResponse,
+        MessageHeadersResponse,
         MessageListResponse,
         MessageSummary,
         Tag,

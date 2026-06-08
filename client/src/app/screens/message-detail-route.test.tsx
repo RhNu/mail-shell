@@ -34,6 +34,12 @@ const messageDetailQueryState = vi.hoisted(() => ({
 
 vi.mock('../../features/messages/queries', () => ({
   useMessageDetail: () => messageDetailQueryState.value,
+  useMessageHeaders: () => ({
+    isLoading: false,
+    isError: false,
+    error: undefined,
+    data: { headers: [] },
+  }),
 }));
 
 function renderRoute(path = '/messages/msg-1') {

@@ -2,6 +2,12 @@ use mail_parser::{Addr, Address, HeaderValue, MessageParser, MimeHeaders};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct RawHeaderEntry {
+    pub name: String,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct MailAddress {
     pub name: Option<String>,
     pub address: Option<String>,
@@ -136,6 +142,69 @@ fn extract_message_id_header(value: &HeaderValue<'_>) -> Option<String> {
     }
 }
 
+#[tracing::instrument(skip(raw))]
+pub fn parse_raw_headers(raw: &[u8]) -> Result<Vec<RawHeaderEntry>, ParseError> {
+    let message = MessageParser::default()
+        .parse(raw)
+        .ok_or(ParseError::InvalidInput)?;
+
+    let mut headers = Vec::new();
+    for header in message.headers() {
+        let name = header.name.as_str().to_string();
+        let value = format_header_value(&header.value);
+        headers.push(RawHeaderEntry { name, value });
+    }
+
+    Ok(headers)
+}
+
+fn format_header_value(value: &HeaderValue<'_>) -> String {
+    match value {
+        HeaderValue::Text(s) => s.to_string(),
+        HeaderValue::TextList(list) => list.join(", "),
+        HeaderValue::DateTime(dt) => dt.to_rfc3339(),
+        HeaderValue::Address(addr) => format_address_value(addr),
+        HeaderValue::ContentType(ct) => {
+            let sub = ct.c_subtype.as_ref().map(|s| s.as_ref()).unwrap_or("");
+            format!("{}/{}", ct.c_type, sub)
+        }
+        HeaderValue::Received(received) => format!("{received:?}"),
+        HeaderValue::Empty => String::new(),
+    }
+}
+
+fn format_address_value(addr: &Address<'_>) -> String {
+    match addr {
+        Address::List(list) => list
+            .iter()
+            .map(|a| {
+                let name = a.name().unwrap_or_default();
+                let address = a.address().unwrap_or_default();
+                if name.is_empty() {
+                    address.to_string()
+                } else {
+                    format!("{name} <{address}>")
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(", "),
+        Address::Group(groups) => groups
+            .iter()
+            .flat_map(|g| g.addresses.iter())
+            .map(|a| {
+                let name = a.name().unwrap_or_default();
+                let address = a.address().unwrap_or_default();
+                if name.is_empty() {
+                    address.to_string()
+                } else {
+                    format!("{name} <{address}>")
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(", "),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -258,5 +327,42 @@ mod tests {
         let parsed = result.unwrap();
         assert_eq!(parsed.subject, "");
         assert!(parsed.from.is_empty());
+    }
+
+    #[test]
+    fn test_parse_raw_headers_simple_email() {
+        let raw = b"From: sender@example.com\r\nTo: recipient@example.com\r\nSubject: Hello\r\nContent-Type: text/plain\r\n\r\nThis is the body.";
+        let headers = parse_raw_headers(raw).unwrap();
+        let names: Vec<&str> = headers.iter().map(|h| h.name.as_str()).collect();
+        assert!(names.contains(&"From"));
+        assert!(names.contains(&"To"));
+        assert!(names.contains(&"Subject"));
+        assert!(names.contains(&"Content-Type"));
+        let from_header = headers.iter().find(|h| h.name == "From").unwrap();
+        assert_eq!(from_header.value, "sender@example.com");
+        let subject_header = headers.iter().find(|h| h.name == "Subject").unwrap();
+        assert_eq!(subject_header.value, "Hello");
+    }
+
+    #[test]
+    fn test_parse_raw_headers_returns_all_headers() {
+        let raw = b"From: sender@example.com\r\nTo: recipient@example.com\r\nSubject: Hello\r\nMessage-ID: <123@example.com>\r\nDate: Mon, 08 Jun 2026 06:39:51 +0000\r\nContent-Type: text/plain\r\n\r\nBody.";
+        let headers = parse_raw_headers(raw).unwrap();
+        assert_eq!(headers.len(), 6);
+    }
+
+    #[test]
+    fn test_parse_raw_headers_multipart() {
+        let raw = b"From: sender@example.com\r\nTo: recipient@example.com\r\nSubject: Hello\r\nContent-Type: multipart/alternative; boundary=\"boundary123\"\r\n\r\n--boundary123\r\nContent-Type: text/plain\r\n\r\nPlain text\r\n--boundary123\r\nContent-Type: text/html\r\n\r\n<html><body>HTML</body></html>\r\n--boundary123--";
+        let headers = parse_raw_headers(raw).unwrap();
+        let names: Vec<&str> = headers.iter().map(|h| h.name.as_str()).collect();
+        assert!(names.contains(&"From"));
+        assert!(names.contains(&"Content-Type"));
+    }
+
+    #[test]
+    fn test_parse_raw_headers_invalid_input_returns_ok() {
+        let headers = parse_raw_headers(b"totally not an email").unwrap();
+        assert!(headers.len() <= 3);
     }
 }

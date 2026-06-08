@@ -152,3 +152,58 @@ async fn test_full_inbound_and_read_roundtrip() {
         .unwrap();
     assert_eq!(recipient_tag["message_count"], 1);
 }
+
+#[tokio::test]
+async fn test_message_headers_endpoint() {
+    let (state, _data_dir) = setup().await;
+    let app = router(state.clone());
+
+    let raw = b"From: sender@example.com\r\nTo: recipient@example.com\r\nSubject: Hello Headers\r\nMessage-ID: <headers-test@example.com>\r\nContent-Type: text/plain\r\n\r\nBody";
+    let meta = r#"{"envelope_to":"recipient@example.com"}"#;
+    let (body, boundary) = build_multipart_body(raw, meta);
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/inbound")
+        .header(
+            "Content-Type",
+            format!("multipart/form-data; boundary={boundary}"),
+        )
+        .body(Body::from(body))
+        .unwrap();
+
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::CREATED);
+    let body_bytes = res.into_body().collect().await.unwrap().to_bytes();
+    let inbound_resp: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    let msg_id = inbound_resp["id"].as_str().unwrap();
+
+    let req = Request::builder()
+        .uri(format!("/api/messages/{msg_id}/headers"))
+        .body(Body::empty())
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let body_bytes = res.into_body().collect().await.unwrap().to_bytes();
+    let headers_resp: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    let headers = headers_resp["headers"].as_array().unwrap();
+    let names: Vec<&str> = headers.iter().map(|h| h["name"].as_str().unwrap()).collect();
+    assert!(names.contains(&"From"));
+    assert!(names.contains(&"To"));
+    assert!(names.contains(&"Subject"));
+    assert!(names.contains(&"Message-ID"));
+}
+
+#[tokio::test]
+async fn test_message_headers_404() {
+    let (state, _data_dir) = setup().await;
+    let app = router(state);
+
+    let req = Request::builder()
+        .uri("/api/messages/nonexistent/headers")
+        .body(Body::empty())
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+}

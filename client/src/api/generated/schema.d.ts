@@ -4,466 +4,530 @@
  */
 
 export interface paths {
-  '/api/attachments/{id}': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/attachments/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download an attachment by its ID.
+         * @description Returns the file bytes with `Content-Type` and `Content-Disposition`
+         *     headers inferred from the database record.
+         */
+        get: operations["downloadAttachment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * Download an attachment by its ID.
-     * @description Returns the file bytes with `Content-Type` and `Content-Disposition`
-     *     headers inferred from the database record.
-     */
-    get: operations['downloadAttachment'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/healthz': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/healthz": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Simple health check endpoint. */
+        get: operations["getHealth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Simple health check endpoint. */
-    get: operations['getHealth'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/inbound': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/inbound": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ingestInboundMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    post: operations['ingestInboundMessage'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/messages': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listMessages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get: operations['listMessages'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/messages/{id}': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/messages/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getMessageDetail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get: operations['getMessageDetail'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/messages/{id}/raw': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/messages/{id}/headers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getMessageHeaders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get: operations['downloadRawMessage'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/tags': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/messages/{id}/raw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["downloadRawMessage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get: operations['listTags'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
+    "/api/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listTags"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
-  schemas: {
-    AttachmentMeta: {
-      content_type?: string | null;
-      filename?: string | null;
-      id: string;
-      message_id: string;
-      /** Format: int64 */
-      size?: number | null;
+    schemas: {
+        AttachmentMeta: {
+            content_type?: string | null;
+            filename?: string | null;
+            id: string;
+            message_id: string;
+            /** Format: int64 */
+            size?: number | null;
+        };
+        ErrorResponse: {
+            error: string;
+        };
+        HeaderEntry: {
+            name: string;
+            value: string;
+        };
+        /** @description Health check response payload. */
+        HealthResponse: {
+            classification_model: string;
+            status: string;
+        };
+        InboundMetadata: {
+            envelope_to: string;
+        };
+        InboundMultipartRequest: {
+            metadata: components["schemas"]["InboundMetadata"];
+            /** Format: binary */
+            raw_mime: string;
+        };
+        InboundResponse: {
+            id: string;
+        };
+        MessageDetail: {
+            body_html?: string | null;
+            body_text?: string | null;
+            cc?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            date?: string | null;
+            envelope_to: string;
+            from_address: string;
+            from_name?: string | null;
+            id: string;
+            in_reply_to?: string | null;
+            message_id?: string | null;
+            reply_to?: string | null;
+            subject: string;
+            to_address?: string | null;
+            to_name?: string | null;
+        };
+        MessageDetailResponse: components["schemas"]["MessageDetail"] & {
+            attachments: components["schemas"]["AttachmentMeta"][];
+        };
+        MessageHeadersResponse: {
+            headers: components["schemas"]["HeaderEntry"][];
+        };
+        MessageListResponse: {
+            items: components["schemas"]["MessageSummary"][];
+            /** Format: int32 */
+            limit: number;
+            /** Format: int32 */
+            page: number;
+            /** Format: int64 */
+            total: number;
+        };
+        MessageSummary: {
+            /** Format: date-time */
+            created_at: string;
+            date?: string | null;
+            envelope_to: string;
+            from_address: string;
+            from_name?: string | null;
+            id: string;
+            message_id?: string | null;
+            subject: string;
+            to_address?: string | null;
+            to_name?: string | null;
+        };
+        Tag: {
+            /** Format: int64 */
+            id: number;
+            kind: string;
+            label: string;
+            /** Format: int64 */
+            message_count?: number | null;
+            source: string;
+            value: string;
+        };
     };
-    ErrorResponse: {
-      error: string;
-    };
-    /** @description Health check response payload. */
-    HealthResponse: {
-      classification_model: string;
-      status: string;
-    };
-    InboundMetadata: {
-      envelope_to: string;
-    };
-    InboundMultipartRequest: {
-      metadata: components['schemas']['InboundMetadata'];
-      /** Format: binary */
-      raw_mime: string;
-    };
-    InboundResponse: {
-      id: string;
-    };
-    MessageDetail: {
-      body_html?: string | null;
-      body_text?: string | null;
-      cc?: string | null;
-      /** Format: date-time */
-      created_at: string;
-      date?: string | null;
-      envelope_to: string;
-      from_address: string;
-      from_name?: string | null;
-      id: string;
-      in_reply_to?: string | null;
-      message_id?: string | null;
-      reply_to?: string | null;
-      subject: string;
-      to_address?: string | null;
-      to_name?: string | null;
-    };
-    MessageDetailResponse: components['schemas']['MessageDetail'] & {
-      attachments: components['schemas']['AttachmentMeta'][];
-    };
-    MessageListResponse: {
-      items: components['schemas']['MessageSummary'][];
-      /** Format: int32 */
-      limit: number;
-      /** Format: int32 */
-      page: number;
-      /** Format: int64 */
-      total: number;
-    };
-    MessageSummary: {
-      /** Format: date-time */
-      created_at: string;
-      date?: string | null;
-      envelope_to: string;
-      from_address: string;
-      from_name?: string | null;
-      id: string;
-      message_id?: string | null;
-      subject: string;
-      to_address?: string | null;
-      to_name?: string | null;
-    };
-    Tag: {
-      /** Format: int64 */
-      id: number;
-      kind: string;
-      label: string;
-      /** Format: int64 */
-      message_count?: number | null;
-      source: string;
-      value: string;
-    };
-  };
-  responses: never;
-  parameters: never;
-  requestBodies: never;
-  headers: never;
-  pathItems: never;
+    responses: never;
+    parameters: never;
+    requestBodies: never;
+    headers: never;
+    pathItems: never;
 }
 export type $defs = Record<string, never>;
 export interface operations {
-  downloadAttachment: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Attachment id */
-        id: string;
-      };
-      cookie?: never;
+    downloadAttachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Attachment id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Attachment bytes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": unknown;
+                };
+            };
+            /** @description Attachment not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Storage or repository failure */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
     };
-    requestBody?: never;
-    responses: {
-      /** @description Attachment bytes */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    getHealth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-        content: {
-          'application/octet-stream': unknown;
+        requestBody?: never;
+        responses: {
+            /** @description Service health */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
         };
-      };
-      /** @description Attachment not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['ErrorResponse'];
-        };
-      };
-      /** @description Storage or repository failure */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['ErrorResponse'];
-        };
-      };
     };
-  };
-  getHealth: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    ingestInboundMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Raw MIME email plus envelope metadata */
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["InboundMultipartRequest"];
+            };
+        };
+        responses: {
+            /** @description Inbound message accepted */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboundResponse"];
+                };
+            };
+            /** @description Bad multipart payload */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Ingest failure */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
     };
-    requestBody?: never;
-    responses: {
-      /** @description Service health */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    listMessages: {
+        parameters: {
+            query?: {
+                /** @description 1-based page number */
+                page?: number;
+                /** @description Page size between 1 and 100 */
+                limit?: number;
+                /** @description Filter by tag id */
+                tag?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-        content: {
-          'application/json': components['schemas']['HealthResponse'];
+        requestBody?: never;
+        responses: {
+            /** @description Paginated message list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageListResponse"];
+                };
+            };
+            /** @description Repository failure */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
-      };
     };
-  };
-  ingestInboundMessage: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    getMessageDetail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Message id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Full message detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageDetailResponse"];
+                };
+            };
+            /** @description Message not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Repository failure */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
     };
-    /** @description Raw MIME email plus envelope metadata */
-    requestBody: {
-      content: {
-        'multipart/form-data': components['schemas']['InboundMultipartRequest'];
-      };
+    getMessageHeaders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Message id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Raw EML headers */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageHeadersResponse"];
+                };
+            };
+            /** @description Message not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Storage or repository failure */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
     };
-    responses: {
-      /** @description Inbound message accepted */
-      201: {
-        headers: {
-          [name: string]: unknown;
+    downloadRawMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Message id */
+                id: string;
+            };
+            cookie?: never;
         };
-        content: {
-          'application/json': components['schemas']['InboundResponse'];
+        requestBody?: never;
+        responses: {
+            /** @description Raw EML bytes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "message/rfc822": unknown;
+                };
+            };
+            /** @description Message not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Storage or repository failure */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
-      };
-      /** @description Bad multipart payload */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['ErrorResponse'];
-        };
-      };
-      /** @description Ingest failure */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['ErrorResponse'];
-        };
-      };
     };
-  };
-  listMessages: {
-    parameters: {
-      query?: {
-        /** @description 1-based page number */
-        page?: number;
-        /** @description Page size between 1 and 100 */
-        limit?: number;
-        /** @description Filter by tag id */
-        tag?: number;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
+    listTags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tag list with message counts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tag"][];
+                };
+            };
+            /** @description Repository failure */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
     };
-    requestBody?: never;
-    responses: {
-      /** @description Paginated message list */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['MessageListResponse'];
-        };
-      };
-      /** @description Repository failure */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['ErrorResponse'];
-        };
-      };
-    };
-  };
-  getMessageDetail: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Message id */
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Full message detail */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['MessageDetailResponse'];
-        };
-      };
-      /** @description Message not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['ErrorResponse'];
-        };
-      };
-      /** @description Repository failure */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['ErrorResponse'];
-        };
-      };
-    };
-  };
-  downloadRawMessage: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Message id */
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Raw EML bytes */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'message/rfc822': unknown;
-        };
-      };
-      /** @description Message not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['ErrorResponse'];
-        };
-      };
-      /** @description Storage or repository failure */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['ErrorResponse'];
-        };
-      };
-    };
-  };
-  listTags: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Tag list with message counts */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Tag'][];
-        };
-      };
-      /** @description Repository failure */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['ErrorResponse'];
-        };
-      };
-    };
-  };
 }

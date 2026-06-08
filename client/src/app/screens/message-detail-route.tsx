@@ -5,6 +5,7 @@ import { useMessageDetail } from '../../features/messages/queries';
 import { ErrorBanner, EmptyState, Skeleton } from '../../components/ui';
 import { AttachmentList } from '../../components/attachment-list';
 import { MessageActionMenu } from '../../components/message-action-menu';
+import { RawHeadersDialog } from '../../components/raw-headers-dialog';
 import { sanitizeEmailHtml } from '../../lib/html-sanitize';
 import { HttpResponseError } from '../../api/core/errors';
 
@@ -96,6 +97,7 @@ function MessageLoadedState(props: {
   bodyText: string | null | undefined;
   remoteResourcesBlocked: boolean;
   onLoadRemoteResources: () => void;
+  onViewHeaders: () => void;
 }) {
   return (
     <>
@@ -107,7 +109,7 @@ function MessageLoadedState(props: {
           >
             {props.query.data!.subject ?? '（无主题）'}
           </h1>
-          <MessageActionMenu messageId={props.query.data!.id} />
+          <MessageActionMenu messageId={props.query.data!.id} onViewHeaders={props.onViewHeaders} />
         </div>
         <MessageMeta
           from={props.query.data!.from_address}
@@ -133,6 +135,7 @@ function MessageDetailContent(props: {
   notFound: boolean;
   remoteResourcesBlocked: boolean;
   onLoadRemoteResources: () => void;
+  onViewHeaders: () => void;
 }) {
   return (
     <>
@@ -145,6 +148,7 @@ function MessageDetailContent(props: {
           bodyText={props.bodyText()}
           remoteResourcesBlocked={props.remoteResourcesBlocked}
           onLoadRemoteResources={props.onLoadRemoteResources}
+          onViewHeaders={props.onViewHeaders}
         />
       ) : props.notFound ? (
         <EmptyState title="邮件未找到" description="您查找的邮件不存在或已被移除。" />
@@ -159,6 +163,7 @@ export function MessageDetailRoute() {
   const params = useParams<{ messageId: string }>();
   const query = useMessageDetail(() => params.messageId);
   const [allowRemoteResources, setAllowRemoteResources] = createSignal(false);
+  const [showHeadersDialog, setShowHeadersDialog] = createSignal(false);
   const sanitizedHtml = createMemo(() =>
     sanitizeEmailHtml(query.data?.body_html ?? '', {
       allowRemoteResources: allowRemoteResources(),
@@ -171,7 +176,10 @@ export function MessageDetailRoute() {
   createEffect(
     on(
       () => params.messageId,
-      () => setAllowRemoteResources(false),
+      () => {
+        setAllowRemoteResources(false);
+        setShowHeadersDialog(false);
+      },
     ),
   );
 
@@ -196,7 +204,15 @@ export function MessageDetailRoute() {
         notFound={isNotFound()}
         remoteResourcesBlocked={sanitizedHtml().hasBlockedRemoteResources}
         onLoadRemoteResources={() => setAllowRemoteResources(true)}
+        onViewHeaders={() => setShowHeadersDialog(true)}
       />
+      <Show when={query.data}>
+        <RawHeadersDialog
+          messageId={query.data!.id}
+          open={showHeadersDialog()}
+          onClose={() => setShowHeadersDialog(false)}
+        />
+      </Show>
     </section>
   );
 }

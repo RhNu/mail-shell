@@ -97,3 +97,14 @@ pub struct InboundResponse {
 pub struct ErrorResponse {
     pub error: String,
 }
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct HeaderEntry {
+    pub name: String,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct MessageHeadersResponse {
+    pub headers: Vec<HeaderEntry>,
+}

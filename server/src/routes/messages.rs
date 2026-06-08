@@ -7,7 +7,8 @@ use axum::{
 use serde::Deserialize;
 
 use crate::error::AppError;
-use crate::models::{ErrorResponse, MessageDetailResponse, MessageListResponse};
+use crate::mime_parser::parse_raw_headers;
+use crate::models::{ErrorResponse, HeaderEntry, MessageDetailResponse, MessageHeadersResponse, MessageListResponse};
 use crate::repository::ListMessagesQuery;
 use crate::routes::AppState;
 
@@ -157,6 +158,48 @@ pub async fn raw_download(
     );
 
     Ok((headers, bytes))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/messages/{id}/headers",
+    operation_id = "getMessageHeaders",
+    params(("id" = String, Path, description = "Message id")),
+    responses(
+        (status = 200, description = "Raw EML headers", body = MessageHeadersResponse),
+        (status = 404, description = "Message not found", body = ErrorResponse),
+        (status = 500, description = "Storage or repository failure", body = ErrorResponse)
+    )
+)]
+#[tracing::instrument(skip(state))]
+pub async fn headers(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<MessageHeadersResponse>, AppError> {
+    let message = state
+        .repo
+        .get_message_raw(&id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+
+    let bytes = tokio::fs::read(&message.raw_path).await?;
+    let parsed = parse_raw_headers(&bytes)?;
+
+    tracing::debug!(
+        message_id = %id,
+        header_count = parsed.len(),
+        "retrieved message headers"
+    );
+
+    Ok(Json(MessageHeadersResponse {
+        headers: parsed
+            .into_iter()
+            .map(|h| HeaderEntry {
+                name: h.name,
+                value: h.value,
+            })
+            .collect(),
+    }))
 }
 
 #[cfg(test)]

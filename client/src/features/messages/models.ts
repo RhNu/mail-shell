@@ -6,3 +6,5 @@ export type MessageSummary = components['schemas']['MessageSummary'];
 export type MessageDetail = components['schemas']['MessageDetail'];
 export type MessageDetailResponse = components['schemas']['MessageDetailResponse'];
 export type AttachmentMeta = components['schemas']['AttachmentMeta'];
+export type HeaderEntry = components['schemas']['HeaderEntry'];
+export type MessageHeadersResponse = components['schemas']['MessageHeadersResponse'];
