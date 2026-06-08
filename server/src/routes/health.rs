@@ -22,6 +22,6 @@ pub struct HealthResponse {
 pub async fn handler(State(_state): State<AppState>) -> Json<HealthResponse> {
     Json(HealthResponse {
         status: "ok",
-        classification_model: "system-tags:recipient_address,recipient_domain",
+        classification_model: "system-tags:recipient_address,recipient_domain,sender_domain",
     })
 }

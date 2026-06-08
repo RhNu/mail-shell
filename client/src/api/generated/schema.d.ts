@@ -51,14 +51,6 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /**
-     * Ingest a raw MIME email via multipart form data.
-     * @description Expects two fields:
-     *     - `raw_mime` — the raw email bytes.
-     *     - `metadata` — JSON with `from`, `to`, and `headers`.
-     *
-     *     On success returns `201 Created` with the generated message ID.
-     */
     post: operations['ingestInboundMessage'];
     delete?: never;
     options?: never;
@@ -73,7 +65,6 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** List messages with optional tag filtering and pagination. */
     get: operations['listMessages'];
     put?: never;
     post?: never;
@@ -90,7 +81,6 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Retrieve the full details of a single message, including its attachments. */
     get: operations['getMessageDetail'];
     put?: never;
     post?: never;
@@ -107,7 +97,6 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Download the raw `.eml` source file of a message. */
     get: operations['downloadRawMessage'];
     put?: never;
     post?: never;
@@ -124,7 +113,6 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** List all tags with their associated message counts. */
     get: operations['listTags'];
     put?: never;
     post?: never;
@@ -138,7 +126,6 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
-    /** @description Metadata for a single attachment belonging to a message. */
     AttachmentMeta: {
       content_type?: string | null;
       filename?: string | null;
@@ -147,7 +134,6 @@ export interface components {
       /** Format: int64 */
       size?: number | null;
     };
-    /** @description Common JSON error body returned by API endpoints. */
     ErrorResponse: {
       error: string;
     };
@@ -156,45 +142,38 @@ export interface components {
       classification_model: string;
       status: string;
     };
-    /** @description Key email headers extracted from inbound metadata. */
-    InboundHeaders: {
-      date: string;
-      'message-id': string;
-      subject: string;
-    };
-    /** @description Metadata accompanying an inbound email submission via multipart form. */
     InboundMetadata: {
-      from: string;
-      headers: components['schemas']['InboundHeaders'];
-      to: string;
+      envelope_to: string;
     };
     InboundMultipartRequest: {
       metadata: components['schemas']['InboundMetadata'];
       /** Format: binary */
       raw_mime: string;
     };
-    /** @description Response returned after successfully ingesting an inbound email. */
     InboundResponse: {
       id: string;
     };
-    /** @description Full message detail including body content. */
     MessageDetail: {
       body_html?: string | null;
       body_text?: string | null;
+      cc?: string | null;
       /** Format: date-time */
       created_at: string;
       date?: string | null;
+      envelope_to: string;
       from_address: string;
+      from_name?: string | null;
       id: string;
+      in_reply_to?: string | null;
       message_id?: string | null;
-      subject?: string | null;
-      to_address: string;
+      reply_to?: string | null;
+      subject: string;
+      to_address?: string | null;
+      to_name?: string | null;
     };
-    /** @description Response wrapper that combines a message with its attachments. */
     MessageDetailResponse: components['schemas']['MessageDetail'] & {
       attachments: components['schemas']['AttachmentMeta'][];
     };
-    /** @description Concrete pagination envelope for the message list endpoint. */
     MessageListResponse: {
       items: components['schemas']['MessageSummary'][];
       /** Format: int32 */
@@ -204,23 +183,19 @@ export interface components {
       /** Format: int64 */
       total: number;
     };
-    /** @description Summary view of a message for list endpoints. */
     MessageSummary: {
       /** Format: date-time */
       created_at: string;
       date?: string | null;
+      envelope_to: string;
       from_address: string;
+      from_name?: string | null;
       id: string;
       message_id?: string | null;
-      subject?: string | null;
-      to_address: string;
+      subject: string;
+      to_address?: string | null;
+      to_name?: string | null;
     };
-    /**
-     * @description A tag that can be associated with messages.
-     *
-     *     `message_count` is populated by aggregate queries and defaults to `None`
-     *     when loaded directly from the `tags` table.
-     */
     Tag: {
       /** Format: int64 */
       id: number;

@@ -4,7 +4,6 @@ use crate::error::AppError;
 use crate::models::{ErrorResponse, Tag};
 use crate::routes::AppState;
 
-/// List all tags with their associated message counts.
 #[utoipa::path(
     get,
     path = "/api/tags",
@@ -48,11 +47,17 @@ mod tests {
             .repo
             .ingest_message(InboundMessageRecord {
                 id: "msg-1".to_string(),
-                from_address: "from@example.com".to_string(),
-                to_address: "to@example.com".to_string(),
-                subject: None,
-                date: None,
                 message_id: Some("<msg-1>".to_string()),
+                subject: "Test".to_string(),
+                from_name: None,
+                from_address: "from@example.com".to_string(),
+                to_name: None,
+                to_address: Some("to@example.com".to_string()),
+                envelope_to: "to@example.com".to_string(),
+                cc: None,
+                reply_to: None,
+                in_reply_to: None,
+                date: Some("2024-01-01T00:00:00+00:00".to_string()),
                 raw_path: "/tmp/raw.msg".to_string(),
                 body_text: None,
                 body_html: None,

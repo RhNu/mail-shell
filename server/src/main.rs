@@ -43,8 +43,8 @@ async fn main() {
         .as_str()
     {
         "bark" => {
-            let server_url =
-                env::var("MAIL_SHELL_BARK_SERVER_URL").unwrap_or_else(|_| "https://api.day.app".into());
+            let server_url = env::var("MAIL_SHELL_BARK_SERVER_URL")
+                .unwrap_or_else(|_| "https://api.day.app".into());
             let key = env::var("MAIL_SHELL_BARK_KEY")
                 .expect("MAIL_SHELL_BARK_KEY is required when MAIL_SHELL_NOTIFIER=bark");
             let group = env::var("MAIL_SHELL_BARK_GROUP").ok();
@@ -56,13 +56,15 @@ async fn main() {
                 group = ?group,
                 "notifier configured"
             );
-            Arc::new(mail_shell_server::services::bark::BarkNotifier::new(BarkConfig {
-                server_url,
-                key,
-                group,
-                sound,
-                level,
-            }))
+            Arc::new(mail_shell_server::services::bark::BarkNotifier::new(
+                BarkConfig {
+                    server_url,
+                    key,
+                    group,
+                    sound,
+                    level,
+                },
+            ))
         }
         _ => {
             info!(notifier = "disabled", "notifier configured");
@@ -70,7 +72,11 @@ async fn main() {
         }
     };
 
-    let inbound_service = Arc::new(InboundMessageService::new(repo.clone(), data_dir.clone(), notifier.clone()));
+    let inbound_service = Arc::new(InboundMessageService::new(
+        repo.clone(),
+        data_dir.clone(),
+        notifier.clone(),
+    ));
 
     let state = routes::AppState {
         repo,

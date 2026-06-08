@@ -8,26 +8,26 @@ use mail_shell_server::repository::{
 use mail_shell_server::services::inbound::InboundMessageService;
 use mail_shell_server::services::notifier::NoopNotifier;
 
-fn sample_metadata(message_id: &str) -> InboundMetadata {
+fn sample_metadata() -> InboundMetadata {
     InboundMetadata {
-        from: "sender@example.com".to_string(),
-        to: "recipient@example.com".to_string(),
-        headers: mail_shell_server::models::InboundHeaders {
-            message_id: message_id.to_string(),
-            subject: "Hello".to_string(),
-            date: "Mon, 01 Jan 2024 00:00:00 +0000".to_string(),
-        },
+        envelope_to: "recipient@example.com".to_string(),
     }
 }
 
 fn sample_record(id: &str, attachment_id: &str, message_id: &str) -> InboundMessageRecord {
     InboundMessageRecord {
         id: id.to_string(),
-        from_address: "sender@example.com".to_string(),
-        to_address: "recipient@example.com".to_string(),
-        subject: Some("Hello".to_string()),
-        date: Some("Mon, 01 Jan 2024 00:00:00 +0000".to_string()),
         message_id: Some(message_id.to_string()),
+        subject: "Hello".to_string(),
+        from_name: None,
+        from_address: "sender@example.com".to_string(),
+        to_name: None,
+        to_address: Some("recipient@example.com".to_string()),
+        envelope_to: "recipient@example.com".to_string(),
+        cc: None,
+        reply_to: None,
+        in_reply_to: None,
+        date: Some("2024-01-01T00:00:00+00:00".to_string()),
         raw_path: format!("/tmp/{id}.eml"),
         body_text: Some("Body".to_string()),
         body_html: None,
@@ -117,16 +117,20 @@ async fn aggregate_ingest_rolls_back_on_duplicate_message_id() {
 async fn inbound_service_cleans_up_files_when_repository_write_fails() {
     let temp_dir = tempfile::tempdir().unwrap();
     let repo = Arc::new(SqlxRepository::init_pool_in_memory().await.unwrap());
-    let service = InboundMessageService::new(repo.clone(), temp_dir.path().to_path_buf(), Arc::new(NoopNotifier));
+    let service = InboundMessageService::new(
+        repo.clone(),
+        temp_dir.path().to_path_buf(),
+        Arc::new(NoopNotifier),
+    );
 
-    let raw = b"From: sender@example.com\r\nTo: recipient@example.com\r\nSubject: Hello\r\nContent-Type: multipart/mixed; boundary=\"boundary123\"\r\n\r\n--boundary123\r\nContent-Type: text/plain\r\n\r\nBody\r\n--boundary123\r\nContent-Type: text/plain\r\nContent-Disposition: attachment; filename=\"hello.txt\"\r\n\r\ntext\r\n--boundary123--";
+    let raw = b"From: sender@example.com\r\nTo: recipient@example.com\r\nSubject: Hello\r\nMessage-ID: <test-dup-msg-id>\r\nContent-Type: multipart/mixed; boundary=\"boundary123\"\r\n\r\n--boundary123\r\nContent-Type: text/plain\r\n\r\nBody\r\n--boundary123\r\nContent-Type: text/plain\r\nContent-Disposition: attachment; filename=\"hello.txt\"\r\n\r\ntext\r\n--boundary123--";
 
     service
-        .ingest(raw.to_vec(), sample_metadata("<dup>"))
+        .ingest(raw.to_vec(), sample_metadata())
         .await
         .unwrap();
 
-    let second = service.ingest(raw.to_vec(), sample_metadata("<dup>")).await;
+    let second = service.ingest(raw.to_vec(), sample_metadata()).await;
     assert!(second.is_err());
 
     let raw_files = std::fs::read_dir(temp_dir.path().join("raw"))

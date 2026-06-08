@@ -5,9 +5,7 @@ export type Env = {
 };
 
 type EnvelopeMetadata = {
-  from: string;
-  to: string;
-  headers: Record<string, string>;
+  envelope_to: string;
 };
 
 export default {
@@ -16,20 +14,12 @@ export default {
       from: message.from,
       to: message.to,
       subject: message.headers.get('subject') ?? '',
-      'message-id': message.headers.get('message-id') ?? '',
-      date: message.headers.get('date') ?? '',
     });
 
     const form = new FormData();
     const raw = await new Response(message.raw).arrayBuffer();
     const metadata: EnvelopeMetadata = {
-      from: message.from,
-      to: message.to,
-      headers: {
-        'message-id': message.headers.get('message-id') ?? '',
-        subject: message.headers.get('subject') ?? '',
-        date: message.headers.get('date') ?? '',
-      },
+      envelope_to: message.to,
     };
 
     form.set('raw_mime', new File([raw], 'message.eml', { type: 'message/rfc822' }));
@@ -37,7 +27,6 @@ export default {
 
     console.log('Forwarding email to', env.INBOUND_URL, {
       rawSize: raw.byteLength,
-      metadataSize: JSON.stringify(metadata).length,
     });
 
     const response = await fetch(env.INBOUND_URL, {

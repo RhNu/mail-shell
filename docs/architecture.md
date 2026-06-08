@@ -45,10 +45,11 @@ Classification is not a free-form folder tree. It is a system-tag model with att
 - each tag has a display `label`
 - each tag has `source = system`
 
-The first two tag kinds are:
+The initial tag kinds are:
 
 - `recipient_address`
 - `recipient_domain`
+- `sender_domain`
 
 This keeps filtering simple while preserving structured data for future expansion.
 
@@ -68,4 +69,3 @@ On successful mail ingest, the server can push a notification through a pluggabl
 - The notifier is selected at startup via `MAIL_SHELL_NOTIFIER` (env: `disabled` / `bark`).
 - Notification is fire-and-forget: ingest succeeds even if the push fails. Errors are logged at warn level.
 - Additional notifier backends can be added by implementing the `Notifier` trait and wiring them in `main.rs`.
-

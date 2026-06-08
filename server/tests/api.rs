@@ -31,7 +31,11 @@ async fn setup() -> (AppState, PathBuf) {
     let repo = Arc::new(SqlxRepository::init_pool(&data_dir).await.unwrap());
     let notifier = Arc::new(NoopNotifier) as Arc<dyn Notifier>;
     let state = AppState {
-        inbound_service: Arc::new(InboundMessageService::new(repo.clone(), data_dir.clone(), notifier.clone())),
+        inbound_service: Arc::new(InboundMessageService::new(
+            repo.clone(),
+            data_dir.clone(),
+            notifier.clone(),
+        )),
         repo,
         notifier,
     };
@@ -87,7 +91,7 @@ async fn test_full_inbound_and_read_roundtrip() {
     let app = router(state.clone());
 
     let raw = b"From: sender@example.com\r\nTo: recipient@example.com\r\nSubject: Hello Roundtrip\r\nContent-Type: text/plain\r\n\r\nRoundtrip body";
-    let meta = r#"{"from":"sender@example.com","to":"recipient@example.com","headers":{"message-id":"<roundtrip-1>","subject":"Hello Roundtrip","date":"Mon, 01 Jan 2024 00:00:00 +0000"}}"#;
+    let meta = r#"{"envelope_to":"recipient@example.com"}"#;
     let (body, boundary) = build_multipart_body(raw, meta);
 
     // 1. POST inbound

@@ -59,7 +59,10 @@ impl Notifier for BarkNotifier {
         if !status.is_success() {
             let status_code = status.as_u16();
             let body = response.text().await?;
-            return Err(NotifierError::BarkError { status: status_code, body });
+            return Err(NotifierError::BarkError {
+                status: status_code,
+                body,
+            });
         }
 
         Ok(())

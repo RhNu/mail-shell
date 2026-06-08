@@ -5,20 +5,16 @@ use axum::{
 };
 
 use crate::{
-    models::ErrorResponse, repository::RepositoryError, services::inbound::InboundServiceError,
-    services::notifier::NotifierError,
+    mime_parser::ParseError, models::ErrorResponse, repository::RepositoryError,
+    services::inbound::InboundServiceError, services::notifier::NotifierError,
 };
 
-/// Central application error type.
-///
-/// Implements `IntoResponse` so that any `Result<..., AppError>` returned
-/// by an Axum handler is automatically converted into an HTTP response.
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
     #[error("mail parse error: {0}")]
-    MailParse(#[from] mailparse::MailParseError),
+    MailParse(#[from] ParseError),
     #[error(transparent)]
     Repo(#[from] RepositoryError),
     #[error(transparent)]

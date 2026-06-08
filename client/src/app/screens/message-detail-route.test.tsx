@@ -12,7 +12,8 @@ type MockMessageDetailQuery = {
     id: string;
     subject: string;
     from_address: string;
-    to_address: string;
+    to_address?: string | null;
+    envelope_to: string;
     created_at: string;
     body_text: string;
     body_html: string;
@@ -50,6 +51,7 @@ const baseMessageDetailData = {
   subject: 'Release plan',
   from_address: 'alice@example.com',
   to_address: 'bob@example.com',
+  envelope_to: 'delivered@example.com',
   created_at: '2026-06-05T10:30:00.000Z',
   body_text: 'Plain fallback',
   body_html: '<p>Hello</p>',
@@ -79,6 +81,16 @@ function setErrorQuery(error: Error) {
   };
 }
 
+function setMissingToHeaderQuery() {
+  messageDetailQueryState.value = {
+    ...messageDetailQueryState.value,
+    data: {
+      ...baseMessageDetailData,
+      to_address: null,
+    },
+  };
+}
+
 describe('MessageDetailRoute', () => {
   beforeEach(() => {
     setSuccessQuery();
@@ -98,6 +110,14 @@ describe('MessageDetailRoute', () => {
     expect(view.container.querySelector('img')?.getAttribute('src')).toBe(
       'https://tracker.test/pixel.png',
     );
+  });
+
+  it('falls back to the envelope recipient when the To header is missing', () => {
+    setMissingToHeaderQuery();
+
+    renderRoute();
+
+    expect(screen.getByText('delivered@example.com')).toBeInTheDocument();
   });
 
   it('shows the retry banner without a not-found empty state for network errors', () => {

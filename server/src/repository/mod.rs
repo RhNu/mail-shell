@@ -1,6 +1,8 @@
 use async_trait::async_trait;
 
-use crate::models::{AttachmentDownloadMeta, AttachmentMeta, MessageDetail, MessageRawMeta, MessageSummary, Tag};
+use crate::models::{
+    AttachmentDownloadMeta, AttachmentMeta, MessageDetail, MessageRawMeta, MessageSummary, Tag,
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum RepositoryError {
@@ -47,11 +49,17 @@ pub struct InboundTagRecord {
 #[derive(Debug, Clone)]
 pub struct InboundMessageRecord {
     pub id: String,
-    pub from_address: String,
-    pub to_address: String,
-    pub subject: Option<String>,
-    pub date: Option<String>,
     pub message_id: Option<String>,
+    pub subject: String,
+    pub from_name: Option<String>,
+    pub from_address: String,
+    pub to_name: Option<String>,
+    pub to_address: Option<String>,
+    pub envelope_to: String,
+    pub cc: Option<String>,
+    pub reply_to: Option<String>,
+    pub in_reply_to: Option<String>,
+    pub date: Option<String>,
     pub raw_path: String,
     pub body_text: Option<String>,
     pub body_html: Option<String>,
@@ -75,10 +83,7 @@ pub trait Repository: Send + Sync {
         id: &str,
     ) -> Result<Option<AttachmentDownloadMeta>, RepositoryError>;
 
-    async fn get_message_raw(
-        &self,
-        id: &str,
-    ) -> Result<Option<MessageRawMeta>, RepositoryError>;
+    async fn get_message_raw(&self, id: &str) -> Result<Option<MessageRawMeta>, RepositoryError>;
 
     async fn list_tags(&self) -> Result<Vec<Tag>, RepositoryError>;
 }

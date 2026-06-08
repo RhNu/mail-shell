@@ -9,13 +9,6 @@ use crate::error::AppError;
 use crate::models::{ErrorResponse, InboundMetadata, InboundResponse};
 use crate::routes::AppState;
 
-/// Ingest a raw MIME email via multipart form data.
-///
-/// Expects two fields:
-/// - `raw_mime` — the raw email bytes.
-/// - `metadata` — JSON with `from`, `to`, and `headers`.
-///
-/// On success returns `201 Created` with the generated message ID.
 #[utoipa::path(
     post,
     path = "/api/inbound",
@@ -115,7 +108,7 @@ mod tests {
         };
 
         let raw = b"From: sender@example.com\r\nTo: recipient@example.com\r\nSubject: Hello\r\nContent-Type: text/plain\r\n\r\nBody";
-        let meta = r#"{"from":"sender@example.com","to":"recipient@example.com","headers":{"message-id":"<abc>","subject":"Hello","date":"Mon, 01 Jan 2024 00:00:00 +0000"}}"#;
+        let meta = r#"{"envelope_to":"recipient@example.com"}"#;
         let (body, boundary) = build_multipart_body(raw, meta);
 
         let req = Request::builder()
@@ -150,7 +143,7 @@ mod tests {
 
         let boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW";
         let body = format!(
-            "--{boundary}\r\nContent-Disposition: form-data; name=\"metadata\"\r\n\r\n{{}}\r\n--{boundary}--\r\n"
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"metadata\"\r\n\r\n{{\"envelope_to\":\"a@b.com\"}}\r\n--{boundary}--\r\n"
         );
 
         let req = Request::builder()

@@ -11,7 +11,6 @@ use crate::models::{ErrorResponse, MessageDetailResponse, MessageListResponse};
 use crate::repository::ListMessagesQuery;
 use crate::routes::AppState;
 
-/// Query parameters for listing messages.
 #[derive(Debug, Deserialize)]
 pub struct ListQuery {
     page: Option<u32>,
@@ -19,7 +18,6 @@ pub struct ListQuery {
     tag: Option<i64>,
 }
 
-/// List messages with optional tag filtering and pagination.
 #[utoipa::path(
     get,
     path = "/api/messages",
@@ -67,7 +65,6 @@ pub async fn list(
     }))
 }
 
-/// Retrieve the full details of a single message, including its attachments.
 #[utoipa::path(
     get,
     path = "/api/messages/{id}",
@@ -101,7 +98,6 @@ pub async fn detail(
     }))
 }
 
-/// Download the raw `.eml` source file of a message.
 #[utoipa::path(
     get,
     path = "/api/messages/{id}/raw",
@@ -130,17 +126,19 @@ pub async fn raw_download(
 
     let bytes = tokio::fs::read(&message.raw_path).await?;
 
-    let filename = message
-        .subject
-        .map(|s| {
-            let sanitized: String = s.chars().take(80).filter(|c| !c.is_control()).collect();
-            if sanitized.is_empty() {
-                format!("{id}.eml")
-            } else {
-                format!("{sanitized}.eml")
-            }
-        })
-        .unwrap_or_else(|| format!("{id}.eml"));
+    let filename = {
+        let sanitized: String = message
+            .subject
+            .chars()
+            .take(80)
+            .filter(|c| !c.is_control())
+            .collect();
+        if sanitized.is_empty() {
+            format!("{id}.eml")
+        } else {
+            format!("{sanitized}.eml")
+        }
+    };
 
     tracing::debug!(
         message_id = %id,
@@ -188,11 +186,17 @@ mod tests {
         for i in 0..n {
             repo.ingest_message(InboundMessageRecord {
                 id: format!("msg-{i}"),
-                from_address: "from@example.com".to_string(),
-                to_address: "to@example.com".to_string(),
-                subject: Some(format!("Subject {i}")),
-                date: None,
                 message_id: Some(format!("<msg-{i}>")),
+                subject: format!("Subject {i}"),
+                from_name: None,
+                from_address: "from@example.com".to_string(),
+                to_name: None,
+                to_address: Some("to@example.com".to_string()),
+                envelope_to: "to@example.com".to_string(),
+                cc: None,
+                reply_to: None,
+                in_reply_to: None,
+                date: Some("2024-01-01T00:00:00+00:00".to_string()),
                 raw_path: format!("/tmp/{i}.eml"),
                 body_text: None,
                 body_html: None,
@@ -228,11 +232,17 @@ mod tests {
             .repo
             .ingest_message(InboundMessageRecord {
                 id: "msg-tagged".to_string(),
-                from_address: "from@example.com".to_string(),
-                to_address: "to@example.com".to_string(),
-                subject: Some("Tagged".to_string()),
-                date: None,
                 message_id: Some("<msg-tagged>".to_string()),
+                subject: "Tagged".to_string(),
+                from_name: None,
+                from_address: "from@example.com".to_string(),
+                to_name: None,
+                to_address: Some("to@example.com".to_string()),
+                envelope_to: "to@example.com".to_string(),
+                cc: None,
+                reply_to: None,
+                in_reply_to: None,
+                date: Some("2024-01-01T00:00:00+00:00".to_string()),
                 raw_path: "/tmp/tagged.eml".to_string(),
                 body_text: None,
                 body_html: None,

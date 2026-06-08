@@ -2,7 +2,7 @@ use axum::Json;
 use utoipa::OpenApi;
 
 use crate::models::{
-    AttachmentMeta, ErrorResponse, InboundHeaders, InboundMetadata, InboundResponse, MessageDetail,
+    AttachmentMeta, ErrorResponse, InboundMetadata, InboundResponse, MessageDetail,
     MessageDetailResponse, MessageListResponse, MessageSummary, Tag,
 };
 
@@ -28,7 +28,6 @@ pub(crate) struct InboundMultipartRequest {
     components(schemas(
         AttachmentMeta,
         ErrorResponse,
-        InboundHeaders,
         InboundMetadata,
         InboundMultipartRequest,
         InboundResponse,

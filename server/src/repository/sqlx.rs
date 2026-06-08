@@ -5,7 +5,9 @@ use sqlx::{
 };
 use std::path::Path;
 
-use crate::models::{AttachmentDownloadMeta, AttachmentMeta, MessageDetail, MessageRawMeta, MessageSummary, Tag};
+use crate::models::{
+    AttachmentDownloadMeta, AttachmentMeta, MessageDetail, MessageRawMeta, MessageSummary, Tag,
+};
 use crate::repository::{
     InboundMessageRecord, ListMessagesQuery, MessagePage, MessageRecord, Repository,
     RepositoryError,
@@ -63,15 +65,21 @@ impl Repository for SqlxRepository {
         let mut tx = self.pool.begin().await?;
 
         sqlx::query(
-            "INSERT INTO messages (id, from_address, to_address, subject, date, message_id, raw_path, body_text, body_html)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            "INSERT INTO messages (id, message_id, subject, from_name, from_address, to_name, to_address, envelope_to, cc, reply_to, in_reply_to, date, raw_path, body_text, body_html)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
         )
         .bind(&record.id)
-        .bind(&record.from_address)
-        .bind(&record.to_address)
-        .bind(&record.subject)
-        .bind(&record.date)
         .bind(&record.message_id)
+        .bind(&record.subject)
+        .bind(&record.from_name)
+        .bind(&record.from_address)
+        .bind(&record.to_name)
+        .bind(&record.to_address)
+        .bind(&record.envelope_to)
+        .bind(&record.cc)
+        .bind(&record.reply_to)
+        .bind(&record.in_reply_to)
+        .bind(&record.date)
         .bind(&record.raw_path)
         .bind(&record.body_text)
         .bind(&record.body_html)
@@ -229,10 +237,7 @@ impl Repository for SqlxRepository {
     }
 
     #[tracing::instrument(skip(self))]
-    async fn get_message_raw(
-        &self,
-        id: &str,
-    ) -> Result<Option<MessageRawMeta>, RepositoryError> {
+    async fn get_message_raw(&self, id: &str) -> Result<Option<MessageRawMeta>, RepositoryError> {
         let row = sqlx::query_as::<_, MessageRawMeta>(
             "SELECT raw_path, subject FROM messages WHERE id = ?1",
         )
@@ -275,11 +280,17 @@ mod tests {
     fn inbound_record(id: &str, attachment_id: &str, message_id: &str) -> InboundMessageRecord {
         InboundMessageRecord {
             id: id.to_string(),
-            from_address: "from@example.com".to_string(),
-            to_address: "to@example.com".to_string(),
-            subject: Some("Subject".to_string()),
-            date: None,
             message_id: Some(message_id.to_string()),
+            subject: "Subject".to_string(),
+            from_name: Some("From".to_string()),
+            from_address: "from@example.com".to_string(),
+            to_name: None,
+            to_address: Some("to@example.com".to_string()),
+            envelope_to: "to@example.com".to_string(),
+            cc: None,
+            reply_to: None,
+            in_reply_to: None,
+            date: Some("2024-01-01T00:00:00+00:00".to_string()),
             raw_path: format!("/tmp/{id}.eml"),
             body_text: Some("Body".to_string()),
             body_html: None,

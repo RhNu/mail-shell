@@ -1,7 +1,7 @@
 use std::{path::PathBuf, sync::Arc};
 
 use crate::{
-    mime_parser::parse_message,
+    mime_parser::{MailAddress, parse_message},
     models::{InboundMetadata, InboundResponse},
     repository::{
         InboundAttachmentRecord, InboundMessageRecord, InboundTagRecord, Repository,
@@ -16,7 +16,7 @@ pub enum InboundServiceError {
     #[error("storage error: {0}")]
     Io(#[from] std::io::Error),
     #[error("mail parse error: {0}")]
-    MailParse(#[from] mailparse::MailParseError),
+    MailParse(#[from] crate::mime_parser::ParseError),
     #[error(transparent)]
     Repository(#[from] RepositoryError),
 }
@@ -29,11 +29,7 @@ pub struct InboundMessageService {
 }
 
 impl InboundMessageService {
-    pub fn new(
-        repo: Arc<dyn Repository>,
-        data_dir: PathBuf,
-        notifier: Arc<dyn Notifier>,
-    ) -> Self {
+    pub fn new(repo: Arc<dyn Repository>, data_dir: PathBuf, notifier: Arc<dyn Notifier>) -> Self {
         Self {
             repo,
             data_dir,
@@ -58,6 +54,7 @@ impl InboundMessageService {
 
             let parsed = parse_message(&raw_mime)?;
             tracing::debug!(
+                subject = %parsed.subject,
                 parsed_attachment_count = parsed.attachments.len(),
                 has_text = parsed.body_text.is_some(),
                 has_html = parsed.body_html.is_some(),
@@ -80,21 +77,34 @@ impl InboundMessageService {
                 });
             }
 
-            let tags = derive_tags(&metadata.to);
+            let tags = derive_tags(&metadata.envelope_to, &parsed.from);
             tracing::debug!(derived_tag_count = tags.len(), "derived tags");
 
             let attachment_count = attachments.len();
             let tag_count = tags.len();
 
-            let notify_from = metadata.from.clone();
-            let notify_subject = metadata.headers.subject.clone();
+            let notify_from = parsed.from.first().map(|a| a.display()).unwrap_or_default();
+            let notify_subject = parsed.subject.clone();
+
+            let (from_name, from_address) = {
+                let (n, a) = first_address_fields(&parsed.from);
+                (n, a.unwrap_or_default())
+            };
+            let (to_name, to_address) = first_address_fields(&parsed.to);
+
             let record = InboundMessageRecord {
                 id: message_id.clone(),
-                from_address: metadata.from,
-                to_address: metadata.to.clone(),
-                subject: Some(metadata.headers.subject),
-                date: Some(metadata.headers.date),
-                message_id: Some(metadata.headers.message_id),
+                message_id: parsed.message_id,
+                subject: parsed.subject,
+                from_name,
+                from_address,
+                to_name,
+                to_address,
+                envelope_to: metadata.envelope_to,
+                cc: addresses_to_json(&parsed.cc),
+                reply_to: addresses_to_json(&parsed.reply_to),
+                in_reply_to: parsed.in_reply_to,
+                date: parsed.date,
                 raw_path: raw_path.to_string_lossy().into_owned(),
                 body_text: parsed.body_text,
                 body_html: parsed.body_html,
@@ -139,8 +149,22 @@ impl InboundMessageService {
     }
 }
 
-fn derive_tags(to_address: &str) -> Vec<InboundTagRecord> {
-    let normalized = to_address.trim().to_lowercase();
+fn first_address_fields(addrs: &[MailAddress]) -> (Option<String>, Option<String>) {
+    match addrs.first() {
+        Some(a) => (a.name.clone(), a.address.clone()),
+        None => (None, None),
+    }
+}
+
+fn addresses_to_json(addrs: &[MailAddress]) -> Option<String> {
+    if addrs.is_empty() {
+        return None;
+    }
+    serde_json::to_string(addrs).ok()
+}
+
+fn derive_tags(envelope_to: &str, from: &[MailAddress]) -> Vec<InboundTagRecord> {
+    let normalized = envelope_to.trim().to_lowercase();
     let mut tags = vec![InboundTagRecord {
         kind: "recipient_address".to_string(),
         value: normalized.clone(),
@@ -155,6 +179,20 @@ fn derive_tags(to_address: &str) -> Vec<InboundTagRecord> {
             label: format!("Domain: {domain}"),
             source: "system".to_string(),
         });
+    }
+
+    if let Some(from_addr) = from.first()
+        && let Some(addr) = &from_addr.address
+    {
+        let from_normalized = addr.trim().to_lowercase();
+        if let Some((_, domain)) = from_normalized.rsplit_once('@') {
+            tags.push(InboundTagRecord {
+                kind: "sender_domain".to_string(),
+                value: domain.to_string(),
+                label: format!("From domain: {domain}"),
+                source: "system".to_string(),
+            });
+        }
     }
 
     tags
@@ -178,15 +216,9 @@ mod tests {
     use crate::repository::{ListMessagesQuery, sqlx::SqlxRepository};
     use crate::services::notifier::NoopNotifier;
 
-    fn sample_metadata(message_id: &str) -> InboundMetadata {
+    fn sample_metadata() -> InboundMetadata {
         InboundMetadata {
-            from: "sender@example.com".to_string(),
-            to: "recipient@example.com".to_string(),
-            headers: crate::models::InboundHeaders {
-                message_id: message_id.to_string(),
-                subject: "Hello".to_string(),
-                date: "Mon, 01 Jan 2024 00:00:00 +0000".to_string(),
-            },
+            envelope_to: "recipient@example.com".to_string(),
         }
     }
 
@@ -199,10 +231,11 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let repo = Arc::new(SqlxRepository::init_pool_in_memory().await.unwrap());
         let notifier = Arc::new(NoopNotifier) as Arc<dyn Notifier>;
-        let service = InboundMessageService::new(repo.clone(), temp_dir.path().to_path_buf(), notifier);
+        let service =
+            InboundMessageService::new(repo.clone(), temp_dir.path().to_path_buf(), notifier);
 
         let response = service
-            .ingest(sample_raw_message(), sample_metadata("<msg-1>"))
+            .ingest(sample_raw_message(), sample_metadata())
             .await
             .unwrap();
 
@@ -215,10 +248,52 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(page.total, 1);
+        assert_eq!(page.items[0].subject, "Hello");
+        assert_eq!(page.items[0].from_address, "sender@example.com");
+        assert_eq!(page.items[0].envelope_to, "recipient@example.com");
 
         let detail = repo.get_message(&response.id).await.unwrap().unwrap();
         assert_eq!(detail.attachments.len(), 1);
         assert!(temp_dir.path().join("raw").is_dir());
         assert!(temp_dir.path().join("attachments").is_dir());
+    }
+
+    #[tokio::test]
+    async fn ingest_real_eml_decodes_subject() {
+        let raw = b"Date: Mon, 08 Jun 2026 06:39:51 +0000\r\nFrom: Discord <noreply@discord.com>\r\nTo: discord+rhnu@rhnu.org\r\nMessage-ID: <verify@example.com>\r\nSubject: =?UTF-8?B?6aqM6K+BIERpc2NvcmQg55qE55S15a2Q6YKu5Lu25Zyw5Z2A?=\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<p>Verify your address.</p>".to_vec();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let repo = Arc::new(SqlxRepository::init_pool_in_memory().await.unwrap());
+        let notifier = Arc::new(NoopNotifier) as Arc<dyn Notifier>;
+        let service =
+            InboundMessageService::new(repo.clone(), temp_dir.path().to_path_buf(), notifier);
+
+        let metadata = InboundMetadata {
+            envelope_to: "discord+rhnu@rhnu.org".to_string(),
+        };
+
+        let response = service.ingest(raw, metadata).await.unwrap();
+
+        let detail = repo.get_message(&response.id).await.unwrap().unwrap();
+        assert_eq!(detail.message.subject, "验证 Discord 的电子邮件地址");
+        assert_eq!(detail.message.from_name.as_deref(), Some("Discord"));
+        assert_eq!(detail.message.from_address, "noreply@discord.com");
+        assert_eq!(detail.message.envelope_to, "discord+rhnu@rhnu.org");
+        assert!(detail.message.body_html.is_some());
+    }
+
+    #[tokio::test]
+    async fn derive_tags_includes_sender_domain() {
+        let tags = derive_tags(
+            "to@example.com",
+            &[MailAddress {
+                name: Some("Discord".to_string()),
+                address: Some("noreply@discord.com".to_string()),
+            }],
+        );
+        assert_eq!(tags.len(), 3);
+        assert_eq!(tags[0].kind, "recipient_address");
+        assert_eq!(tags[1].kind, "recipient_domain");
+        assert_eq!(tags[2].kind, "sender_domain");
+        assert_eq!(tags[2].value, "discord.com");
     }
 }

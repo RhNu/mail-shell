@@ -111,7 +111,7 @@ function MessageLoadedState(props: {
         </div>
         <MessageMeta
           from={props.query.data!.from_address}
-          to={props.query.data!.to_address}
+          to={props.query.data!.to_address ?? props.query.data!.envelope_to}
           createdAt={props.query.data!.created_at}
         />
       </div>
