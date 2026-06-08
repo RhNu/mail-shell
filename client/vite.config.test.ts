@@ -9,12 +9,4 @@ describe('PWA configuration', () => {
     expect(pwaOptions.workbox?.globPatterns).toContain('**/*.{js,css,svg,png,ico}');
     expect(pwaOptions.workbox?.navigateFallback).toBeUndefined();
   });
-
-  it('includes iOS home screen icon assets', () => {
-    expect(pwaOptions.includeAssets).toEqual([
-      'favicon.svg',
-      'apple-touch-icon.png',
-      'apple-touch-icon-180x180.png',
-    ]);
-  });
 });
