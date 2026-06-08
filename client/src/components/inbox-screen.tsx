@@ -1,10 +1,7 @@
 import { createEffect, createMemo, createSignal, type Accessor, type JSX } from 'solid-js';
 import { useMessagesList } from '../features/messages/queries';
 import type { MessageListQuery, MessageSummary } from '../features/messages/models';
-import { SearchInput } from './ui/search-input';
-import { Pagination } from './ui/pagination';
-import { EmptyState } from './ui/empty-state';
-import { ErrorBanner } from './ui/error-banner';
+import { SearchInput, Pagination, EmptyState, ErrorBanner } from './ui';
 import { MessageList } from './message-list';
 import { MessageListSkeleton } from './message-list-skeleton';
 

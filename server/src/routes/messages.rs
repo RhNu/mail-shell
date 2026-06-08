@@ -1,6 +1,8 @@
 use axum::{
     Json,
     extract::{Path, Query, State},
+    http::header,
+    response::IntoResponse,
 };
 use serde::Deserialize;
 
@@ -97,6 +99,66 @@ pub async fn detail(
         message: message.message,
         attachments: message.attachments,
     }))
+}
+
+/// Download the raw `.eml` source file of a message.
+#[utoipa::path(
+    get,
+    path = "/api/messages/{id}/raw",
+    operation_id = "downloadRawMessage",
+    params(("id" = String, Path, description = "Message id")),
+    responses(
+        (
+            status = 200,
+            description = "Raw EML bytes",
+            content_type = "message/rfc822"
+        ),
+        (status = 404, description = "Message not found", body = ErrorResponse),
+        (status = 500, description = "Storage or repository failure", body = ErrorResponse)
+    )
+)]
+#[tracing::instrument(skip(state))]
+pub async fn raw_download(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    let message = state
+        .repo
+        .get_message_raw(&id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+
+    let bytes = tokio::fs::read(&message.raw_path).await?;
+
+    let filename = message
+        .subject
+        .map(|s| {
+            let sanitized: String = s.chars().take(80).filter(|c| !c.is_control()).collect();
+            if sanitized.is_empty() {
+                format!("{id}.eml")
+            } else {
+                format!("{sanitized}.eml")
+            }
+        })
+        .unwrap_or_else(|| format!("{id}.eml"));
+
+    tracing::debug!(
+        message_id = %id,
+        filename = %filename,
+        byte_size = bytes.len(),
+        "sending raw eml"
+    );
+
+    let mut headers = axum::http::HeaderMap::new();
+    headers.insert(header::CONTENT_TYPE, "message/rfc822".parse().unwrap());
+    headers.insert(
+        header::CONTENT_DISPOSITION,
+        format!(r#"attachment; filename="{}""#, filename)
+            .parse()
+            .unwrap(),
+    );
+
+    Ok((headers, bytes))
 }
 
 #[cfg(test)]

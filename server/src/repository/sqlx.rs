@@ -5,7 +5,7 @@ use sqlx::{
 };
 use std::path::Path;
 
-use crate::models::{AttachmentDownloadMeta, AttachmentMeta, MessageDetail, MessageSummary, Tag};
+use crate::models::{AttachmentDownloadMeta, AttachmentMeta, MessageDetail, MessageRawMeta, MessageSummary, Tag};
 use crate::repository::{
     InboundMessageRecord, ListMessagesQuery, MessagePage, MessageRecord, Repository,
     RepositoryError,
@@ -225,6 +225,21 @@ impl Repository for SqlxRepository {
         .fetch_optional(&self.pool)
         .await?;
         tracing::debug!(attachment_id = %id, found = row.is_some(), "retrieved attachment download meta");
+        Ok(row)
+    }
+
+    #[tracing::instrument(skip(self))]
+    async fn get_message_raw(
+        &self,
+        id: &str,
+    ) -> Result<Option<MessageRawMeta>, RepositoryError> {
+        let row = sqlx::query_as::<_, MessageRawMeta>(
+            "SELECT raw_path, subject FROM messages WHERE id = ?1",
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+        tracing::debug!(message_id = %id, found = row.is_some(), "retrieved message raw meta");
         Ok(row)
     }
 

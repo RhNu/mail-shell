@@ -38,6 +38,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/inbound", post(inbound::handler))
         .route("/api/messages", get(messages::list))
         .route("/api/messages/{id}", get(messages::detail))
+        .route("/api/messages/{id}/raw", get(messages::raw_download))
         .route("/api/attachments/{id}", get(attachments::download))
         .route("/api/tags", get(tags::list))
         .with_state(state)

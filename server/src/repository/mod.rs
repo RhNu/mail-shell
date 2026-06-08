@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 
-use crate::models::{AttachmentDownloadMeta, AttachmentMeta, MessageDetail, MessageSummary, Tag};
+use crate::models::{AttachmentDownloadMeta, AttachmentMeta, MessageDetail, MessageRawMeta, MessageSummary, Tag};
 
 #[derive(Debug, thiserror::Error)]
 pub enum RepositoryError {
@@ -74,6 +74,11 @@ pub trait Repository: Send + Sync {
         &self,
         id: &str,
     ) -> Result<Option<AttachmentDownloadMeta>, RepositoryError>;
+
+    async fn get_message_raw(
+        &self,
+        id: &str,
+    ) -> Result<Option<MessageRawMeta>, RepositoryError>;
 
     async fn list_tags(&self) -> Result<Vec<Tag>, RepositoryError>;
 }

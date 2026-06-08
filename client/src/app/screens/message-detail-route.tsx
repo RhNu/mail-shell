@@ -2,10 +2,9 @@ import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
 import { useParams } from '@solidjs/router';
 import { ArrowLeft, Calendar, User } from 'lucide-solid';
 import { useMessageDetail } from '../../features/messages/queries';
-import { ErrorBanner } from '../../components/ui/error-banner';
-import { EmptyState } from '../../components/ui/empty-state';
-import { Skeleton } from '../../components/ui/skeleton';
+import { ErrorBanner, EmptyState, Skeleton } from '../../components/ui';
 import { AttachmentList } from '../../components/attachment-list';
+import { MessageActionMenu } from '../../components/message-action-menu';
 import { sanitizeEmailHtml } from '../../lib/html-sanitize';
 import { HttpResponseError } from '../../api/core/errors';
 
@@ -101,12 +100,15 @@ function MessageLoadedState(props: {
   return (
     <>
       <div class="flex flex-col gap-4">
-        <h1
-          id="message-detail-heading"
-          class="text-xl font-semibold text-zinc-900 break-words dark:text-zinc-100"
-        >
-          {props.query.data!.subject ?? '（无主题）'}
-        </h1>
+        <div class="flex items-start justify-between gap-3">
+          <h1
+            id="message-detail-heading"
+            class="text-xl font-semibold text-zinc-900 break-words dark:text-zinc-100"
+          >
+            {props.query.data!.subject ?? '（无主题）'}
+          </h1>
+          <MessageActionMenu messageId={props.query.data!.id} />
+        </div>
         <MessageMeta
           from={props.query.data!.from_address}
           to={props.query.data!.to_address}

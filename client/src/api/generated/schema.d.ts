@@ -100,6 +100,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/messages/{id}/raw': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Download the raw `.eml` source file of a message. */
+    get: operations['downloadRawMessage'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/tags': {
     parameters: {
       query?: never;
@@ -394,6 +411,47 @@ export interface operations {
         };
       };
       /** @description Repository failure */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorResponse'];
+        };
+      };
+    };
+  };
+  downloadRawMessage: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Message id */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Raw EML bytes */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'message/rfc822': unknown;
+        };
+      };
+      /** @description Message not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorResponse'];
+        };
+      };
+      /** @description Storage or repository failure */
       500: {
         headers: {
           [name: string]: unknown;

@@ -63,6 +63,13 @@ pub struct AttachmentDownloadMeta {
     pub content_type: Option<String>,
 }
 
+/// Metadata needed to download the raw EML source of a message.
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct MessageRawMeta {
+    pub raw_path: String,
+    pub subject: Option<String>,
+}
+
 /// A tag that can be associated with messages.
 ///
 /// `message_count` is populated by aggregate queries and defaults to `None`

@@ -21,6 +21,7 @@ pub(crate) struct InboundMultipartRequest {
         crate::routes::inbound::handler,
         crate::routes::messages::list,
         crate::routes::messages::detail,
+        crate::routes::messages::raw_download,
         crate::routes::attachments::download,
         crate::routes::tags::list,
     ),

@@ -1,4 +1,5 @@
 import { apiClient } from '../../api/core/client';
+import { resolveApiBaseUrl } from '../../api/core/config';
 import { executeJson } from '../../api/core/response';
 import type { MessageDetailResponse, MessageListQuery, MessageListResponse } from './models';
 
@@ -16,4 +17,8 @@ export function getMessageDetail(id: string): Promise<MessageDetailResponse> {
       params: { path: { id } },
     }),
   );
+}
+
+export function rawMessageDownloadUrl(id: string): string {
+  return `${resolveApiBaseUrl()}/api/messages/${id}/raw`;
 }

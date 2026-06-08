@@ -1,6 +1,6 @@
 import { Index } from 'solid-js';
 import type { JSX } from 'solid-js';
-import { Skeleton } from './ui/skeleton';
+import { Skeleton } from './ui';
 
 export function MessageListSkeleton(): JSX.Element {
   return (
