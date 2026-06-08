@@ -1,9 +1,9 @@
 import { defineConfig } from 'vitest/config';
 import tailwindcss from '@tailwindcss/vite';
 import solid from 'vite-plugin-solid';
-import { VitePWA } from 'vite-plugin-pwa';
+import { VitePWA, type VitePWAOptions } from 'vite-plugin-pwa';
 
-const pwaPlugin = VitePWA({
+export const pwaOptions = {
   registerType: 'autoUpdate',
   injectRegister: 'auto',
   useCredentials: true,
@@ -40,10 +40,13 @@ const pwaPlugin = VitePWA({
     ],
   },
   workbox: {
-    globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
+    globPatterns: ['**/*.{js,css,svg,png,ico}'],
+    navigateFallback: undefined,
   },
-  includeAssets: ['favicon.svg', 'apple-touch-icon-180x180.png'],
-});
+  includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'apple-touch-icon-180x180.png'],
+} satisfies Partial<VitePWAOptions>;
+
+const pwaPlugin = VitePWA(pwaOptions);
 
 export default defineConfig(({ mode }) => {
   const isTest = mode === 'test';
