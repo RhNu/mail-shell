@@ -14,6 +14,7 @@ export type MessageListProps = {
   onMoveToMailbox?: (_id: string, _mailbox: Mailbox) => void;
   // eslint-disable-next-line no-unused-vars
   onDelete?: (_id: string) => void;
+  actionsDisabled?: boolean;
 };
 
 export function MessageList(props: MessageListProps): JSX.Element {
@@ -41,6 +42,7 @@ export function MessageList(props: MessageListProps): JSX.Element {
             returnTo={props.returnTo}
             onMoveToMailbox={props.onMoveToMailbox}
             onDelete={props.onDelete}
+            actionsDisabled={props.actionsDisabled}
           />
         )}
       </For>

@@ -1,12 +1,14 @@
 import { createSignal } from 'solid-js';
-import { fireEvent, render, screen } from '@solidjs/testing-library';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, within } from '@solidjs/testing-library';
+import { beforeEach, expect, it, vi } from 'vitest';
 import { InboxScreen } from './inbox-screen';
 
 const messagesListHookState = vi.hoisted(() => ({
   refetch: vi.fn(),
   updateMailbox: vi.fn(),
   deleteMessage: vi.fn(),
+  updateMailboxPending: false,
+  deleteMessagePending: false,
 }));
 
 vi.mock('../features/messages/queries', () => ({
@@ -43,11 +45,15 @@ vi.mock('../features/messages/queries', () => ({
   }),
   useUpdateMessageMailbox: () => ({
     mutate: messagesListHookState.updateMailbox,
-    isPending: false,
+    get isPending() {
+      return messagesListHookState.updateMailboxPending;
+    },
   }),
   useDeleteMessage: () => ({
     mutate: messagesListHookState.deleteMessage,
-    isPending: false,
+    get isPending() {
+      return messagesListHookState.deleteMessagePending;
+    },
   }),
 }));
 
@@ -76,49 +82,69 @@ function TestHarness() {
   );
 }
 
-describe('InboxScreen', () => {
-  beforeEach(() => {
-    vi.restoreAllMocks();
-    vi.stubGlobal('scrollTo', vi.fn());
-    messagesListHookState.updateMailbox.mockReset();
-    messagesListHookState.deleteMessage.mockReset();
+async function selectMenuItem(name: string) {
+  const item = await screen.findByRole('menuitem', { name });
+  await fireEvent.pointerDown(item, { pointerType: 'mouse' });
+  await fireEvent.click(item);
+}
+
+beforeEach(() => {
+  vi.restoreAllMocks();
+  vi.stubGlobal('scrollTo', vi.fn());
+  messagesListHookState.updateMailbox.mockReset();
+  messagesListHookState.deleteMessage.mockReset();
+  messagesListHookState.updateMailboxPending = false;
+  messagesListHookState.deleteMessagePending = false;
+});
+
+it('resets pagination when the backing query changes', async () => {
+  render(() => <TestHarness />);
+
+  expect(screen.getByText('General page 1')).toBeInTheDocument();
+
+  await fireEvent.click(screen.getByRole('button', { name: '3' }));
+  expect(screen.getByText('General page 3')).toBeInTheDocument();
+
+  await fireEvent.click(screen.getByRole('button', { name: 'Switch tag' }));
+  expect(screen.getByText('Tag 2 first page')).toBeInTheDocument();
+  expect(screen.queryByText('No messages yet')).not.toBeInTheDocument();
+});
+
+it('archives an inbox message from the list action menu', async () => {
+  render(() => <InboxScreen title={<h1>Inbox</h1>} query={() => ({ mailbox: 'inbox' })} />);
+
+  await fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
+  await selectMenuItem('归档');
+
+  expect(messagesListHookState.updateMailbox).toHaveBeenCalledWith({
+    id: 'msg-page-1',
+    mailbox: 'archive',
   });
+});
 
-  it('resets pagination when the backing query changes', async () => {
-    render(() => <TestHarness />);
+it('permanently deletes a message from the list action menu after confirmation', async () => {
+  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
 
-    expect(screen.getByText('General page 1')).toBeInTheDocument();
+  render(() => <InboxScreen title={<h1>Inbox</h1>} query={() => ({ mailbox: 'inbox' })} />);
 
-    await fireEvent.click(screen.getByRole('button', { name: '3' }));
-    expect(screen.getByText('General page 3')).toBeInTheDocument();
+  await fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
+  await selectMenuItem('永久删除');
+  await fireEvent.click(
+    within(screen.getByRole('dialog', { name: '永久删除邮件' })).getByRole('button', {
+      name: '永久删除',
+    }),
+  );
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Switch tag' }));
-    expect(screen.getByText('Tag 2 first page')).toBeInTheDocument();
-    expect(screen.queryByText('No messages yet')).not.toBeInTheDocument();
+  expect(confirm).not.toHaveBeenCalled();
+  expect(messagesListHookState.deleteMessage).toHaveBeenCalledWith({
+    id: 'msg-page-1',
   });
+});
 
-  it('archives an inbox message from the list action menu', async () => {
-    render(() => <InboxScreen title={<h1>Inbox</h1>} query={() => ({ mailbox: 'inbox' })} />);
+it('disables list action menus while a message mutation is pending', () => {
+  messagesListHookState.deleteMessagePending = true;
 
-    await fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
-    await fireEvent.click(await screen.findByRole('menuitem', { name: '归档' }));
+  render(() => <InboxScreen title={<h1>Inbox</h1>} query={() => ({ mailbox: 'inbox' })} />);
 
-    expect(messagesListHookState.updateMailbox).toHaveBeenCalledWith({
-      id: 'msg-page-1',
-      mailbox: 'archive',
-    });
-  });
-
-  it('permanently deletes a message from the list action menu after confirmation', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
-
-    render(() => <InboxScreen title={<h1>Inbox</h1>} query={() => ({ mailbox: 'inbox' })} />);
-
-    await fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
-    await fireEvent.click(await screen.findByRole('menuitem', { name: '永久删除' }));
-
-    expect(messagesListHookState.deleteMessage).toHaveBeenCalledWith({
-      id: 'msg-page-1',
-    });
-  });
+  expect(screen.getByRole('button', { name: '更多操作' })).toBeDisabled();
 });

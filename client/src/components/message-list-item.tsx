@@ -18,6 +18,7 @@ export type MessageListItemProps = {
   onMoveToMailbox?: (_id: string, _mailbox: Mailbox) => void;
   // eslint-disable-next-line no-unused-vars
   onDelete?: (_id: string) => void;
+  actionsDisabled?: boolean;
 };
 
 function MessageListItemLink(props: {
@@ -88,6 +89,7 @@ function MessageListItemActions(props: MessageListItemProps) {
           : undefined
       }
       onDelete={props.onDelete ? () => props.onDelete?.(props.message.id) : undefined}
+      disabled={props.actionsDisabled}
     />
   );
 }

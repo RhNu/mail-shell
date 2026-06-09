@@ -36,6 +36,7 @@ function ListSection(props: {
   onMoveToMailbox: (id: string, mailbox: Mailbox) => void;
   // eslint-disable-next-line no-unused-vars
   onDelete: (id: string) => void;
+  actionsDisabled: boolean;
   emptyDescription?: string;
 }) {
   return (
@@ -52,6 +53,7 @@ function ListSection(props: {
             returnTo={props.returnTo}
             onMoveToMailbox={props.onMoveToMailbox}
             onDelete={props.onDelete}
+            actionsDisabled={props.actionsDisabled}
           />
           {props.totalPages > 1 && (
             <div class="pt-2">
@@ -139,6 +141,7 @@ export function InboxScreen(props: InboxScreenProps): JSX.Element {
         onPageChange={state.setPageAndScroll}
         onMoveToMailbox={state.moveToMailbox}
         onDelete={state.deleteMessage}
+        actionsDisabled={state.actionsDisabled()}
         emptyDescription={props.emptyDescription}
       />
     </section>
@@ -177,6 +180,7 @@ function useInboxState(query: Accessor<MessageListQuery>) {
     messagesQuery,
     totalPages,
     mutationErrorMessage,
+    actionsDisabled: () => updateMailboxMutation.isPending || deleteMessageMutation.isPending,
     setPageAndScroll: (newPage: number) => {
       setPage(newPage);
       scrollToTop();

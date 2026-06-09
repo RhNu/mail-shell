@@ -1,5 +1,5 @@
 import { Route, HashRouter } from '@solidjs/router';
-import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { HttpResponseError, NetworkRequestError } from '../../api/core/errors';
 import { MessageDetailRoute } from './message-detail-route';
@@ -87,6 +87,12 @@ function renderRoute(path = '/messages/msg-1') {
       <Route path="/messages/:messageId" component={MessageDetailRoute} />
     </HashRouter>
   ));
+}
+
+async function selectMenuItem(name: string) {
+  const item = await screen.findByRole('menuitem', { name });
+  await fireEvent.pointerDown(item, { pointerType: 'mouse' });
+  await fireEvent.click(item);
 }
 
 const baseMessageDetailData = {
@@ -213,7 +219,7 @@ it('restores archived messages from the action menu', async () => {
   renderRoute();
 
   await fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
-  await fireEvent.click(await screen.findByRole('menuitem', { name: '移回收件箱' }));
+  await selectMenuItem('移回收件箱');
 
   expect(messageDetailQueryState.updateMailbox).toHaveBeenCalled();
   expect(messageDetailQueryState.updateMailbox.mock.calls[0][0]).toEqual({
@@ -243,13 +249,13 @@ it('returns to the source route after a mailbox action succeeds', async () => {
   renderRoute('/messages/msg-1?returnTo=%2Farchive');
 
   await fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
-  await fireEvent.click(await screen.findByRole('menuitem', { name: '归档' }));
+  await selectMenuItem('归档');
 
   await waitFor(() => expect(window.location.hash).toBe('#/archive'));
 });
 
 it('deletes from detail after confirmation and returns to the source route', async () => {
-  vi.spyOn(window, 'confirm').mockReturnValue(true);
+  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
   messageDetailQueryState.deleteMessage.mockImplementation((_variables, options) => {
     options.onSuccess();
   });
@@ -257,8 +263,14 @@ it('deletes from detail after confirmation and returns to the source route', asy
   renderRoute('/messages/msg-1?returnTo=%2Ftags%2F7');
 
   await fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
-  await fireEvent.click(await screen.findByRole('menuitem', { name: '永久删除' }));
+  await selectMenuItem('永久删除');
+  await fireEvent.click(
+    within(screen.getByRole('dialog', { name: '永久删除邮件' })).getByRole('button', {
+      name: '永久删除',
+    }),
+  );
 
+  expect(confirm).not.toHaveBeenCalled();
   expect(messageDetailQueryState.deleteMessage.mock.calls[0][0]).toEqual({ id: 'msg-1' });
   await waitFor(() => expect(window.location.hash).toBe('#/tags/7'));
 });
