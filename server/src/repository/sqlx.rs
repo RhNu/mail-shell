@@ -8,12 +8,12 @@ use std::path::Path;
 
 use crate::mime_parser::{ParsedMailSnapshotV1, SNAPSHOT_VERSION};
 use crate::models::{
-    AttachmentDownloadMeta, AttachmentMeta, HeaderEntry, MessageDetail, MessageRawMeta,
+    AttachmentDownloadMeta, AttachmentMeta, HeaderEntry, Mailbox, MessageDetail, MessageRawMeta,
     MessageSummary, Tag,
 };
 use crate::repository::{
-    InboundMessageRecord, ListMessagesQuery, MessagePage, MessageRecord, Repository,
-    RepositoryError,
+    DeletedMessageFiles, InboundMessageRecord, ListMessagesQuery, MessagePage, MessageRecord,
+    Repository, RepositoryError,
 };
 
 static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
@@ -36,6 +36,7 @@ struct StoredMessage {
     to_address: Option<String>,
     envelope_to: String,
     date: Option<String>,
+    mailbox: Mailbox,
     snapshot_version: i64,
     parsed_snapshot: String,
     created_at: DateTime<Utc>,
@@ -216,13 +217,16 @@ impl Repository for SqlxRepository {
                 "SELECT COUNT(*)
                  FROM messages m
                  JOIN message_tags mt ON mt.message_id = m.id
-                 WHERE mt.tag_id = ?1",
+                 WHERE mt.tag_id = ?1
+                   AND m.mailbox = ?2",
             )
             .bind(tag_id)
+            .bind(query.mailbox.as_str())
             .fetch_one(&self.pool)
             .await?
         } else {
-            sqlx::query_scalar("SELECT COUNT(*) FROM messages")
+            sqlx::query_scalar("SELECT COUNT(*) FROM messages WHERE mailbox = ?1")
+                .bind(query.mailbox.as_str())
                 .fetch_one(&self.pool)
                 .await?
         };
@@ -230,14 +234,16 @@ impl Repository for SqlxRepository {
         let items = if let Some(tag_id) = query.tag_id {
             sqlx::query_as::<_, MessageSummary>(
                 "SELECT m.id, m.from_name, m.from_address, m.to_name, m.to_address,
-                        m.envelope_to, m.subject, m.date, m.message_id, m.created_at
+                        m.envelope_to, m.subject, m.date, m.message_id, m.mailbox, m.created_at
                  FROM messages m
                  JOIN message_tags mt ON mt.message_id = m.id
                  WHERE mt.tag_id = ?1
+                   AND m.mailbox = ?2
                  ORDER BY m.created_at DESC, m.id DESC
-                 LIMIT ?2 OFFSET ?3",
+                 LIMIT ?3 OFFSET ?4",
             )
             .bind(tag_id)
+            .bind(query.mailbox.as_str())
             .bind(query.limit)
             .bind(query.offset)
             .fetch_all(&self.pool)
@@ -245,11 +251,13 @@ impl Repository for SqlxRepository {
         } else {
             sqlx::query_as::<_, MessageSummary>(
                 "SELECT id, from_name, from_address, to_name, to_address,
-                        envelope_to, subject, date, message_id, created_at
+                        envelope_to, subject, date, message_id, mailbox, created_at
                  FROM messages
+                 WHERE mailbox = ?1
                  ORDER BY created_at DESC, id DESC
-                 LIMIT ?1 OFFSET ?2",
+                 LIMIT ?2 OFFSET ?3",
             )
+            .bind(query.mailbox.as_str())
             .bind(query.limit)
             .bind(query.offset)
             .fetch_all(&self.pool)
@@ -260,6 +268,7 @@ impl Repository for SqlxRepository {
             total,
             returned_count = items.len(),
             tag_filter = ?query.tag_id,
+            mailbox = %query.mailbox,
             limit = query.limit,
             offset = query.offset,
             "listed messages"
@@ -271,7 +280,7 @@ impl Repository for SqlxRepository {
     async fn get_message(&self, id: &str) -> Result<Option<MessageRecord>, RepositoryError> {
         let stored = sqlx::query_as::<_, StoredMessage>(
             "SELECT id, message_id, subject, from_name, from_address, to_name, to_address,
-                    envelope_to, date, snapshot_version, parsed_snapshot, created_at
+                    envelope_to, date, mailbox, snapshot_version, parsed_snapshot, created_at
              FROM messages
              WHERE id = ?1",
         )
@@ -297,6 +306,7 @@ impl Repository for SqlxRepository {
             subject: stored.subject,
             date: stored.date,
             message_id: stored.message_id,
+            mailbox: stored.mailbox,
             body_text: snapshot.primary_body_text,
             body_html: snapshot.primary_body_html,
             created_at: stored.created_at,
@@ -316,6 +326,71 @@ impl Repository for SqlxRepository {
         Ok(Some(MessageRecord {
             message,
             attachments,
+        }))
+    }
+
+    #[tracing::instrument(skip(self))]
+    async fn update_message_mailbox(
+        &self,
+        id: &str,
+        mailbox: Mailbox,
+    ) -> Result<bool, RepositoryError> {
+        let result = sqlx::query("UPDATE messages SET mailbox = ?1 WHERE id = ?2")
+            .bind(mailbox.as_str())
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+
+        let updated = result.rows_affected() > 0;
+        tracing::debug!(message_id = %id, mailbox = %mailbox, updated, "updated message mailbox");
+        Ok(updated)
+    }
+
+    #[tracing::instrument(skip(self))]
+    async fn delete_message(
+        &self,
+        id: &str,
+    ) -> Result<Option<DeletedMessageFiles>, RepositoryError> {
+        let mut tx = self.pool.begin().await?;
+
+        let raw_path: Option<String> =
+            sqlx::query_scalar("SELECT raw_path FROM messages WHERE id = ?1")
+                .bind(id)
+                .fetch_optional(&mut *tx)
+                .await?;
+
+        let Some(raw_path) = raw_path else {
+            return Ok(None);
+        };
+
+        let attachment_paths: Vec<String> =
+            sqlx::query_scalar("SELECT path FROM attachments WHERE message_id = ?1 ORDER BY id")
+                .bind(id)
+                .fetch_all(&mut *tx)
+                .await?;
+
+        sqlx::query("DELETE FROM message_tags WHERE message_id = ?1")
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM attachments WHERE message_id = ?1")
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM messages WHERE id = ?1")
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
+
+        tx.commit().await?;
+        tracing::debug!(
+            message_id = %id,
+            attachment_count = attachment_paths.len(),
+            "deleted message"
+        );
+        Ok(Some(DeletedMessageFiles {
+            raw_path,
+            attachment_paths,
         }))
     }
 
@@ -385,13 +460,15 @@ impl Repository for SqlxRepository {
                 t.value,
                 t.label,
                 t.source,
-                COUNT(mt.message_id) AS message_count
+                COUNT(m.id) AS message_count
             FROM tags t
             LEFT JOIN message_tags mt ON mt.tag_id = t.id
+            LEFT JOIN messages m ON m.id = mt.message_id AND m.mailbox = ?1
             GROUP BY t.id
             ORDER BY t.kind, t.value
             "#,
         )
+        .bind(Mailbox::Inbox.as_str())
         .fetch_all(&self.pool)
         .await?;
         tracing::debug!(tag_count = tags.len(), "listed tags");
@@ -472,6 +549,7 @@ mod tests {
                 .unwrap();
         assert!(columns.contains(&"snapshot_version".to_string()));
         assert!(columns.contains(&"parsed_snapshot".to_string()));
+        assert!(columns.contains(&"mailbox".to_string()));
         assert!(!columns.contains(&"body_text".to_string()));
         assert!(!columns.contains(&"body_html".to_string()));
         assert!(!columns.contains(&"cc".to_string()));
@@ -495,6 +573,7 @@ mod tests {
         let page = repo
             .list_messages(ListMessagesQuery {
                 tag_id: None,
+                mailbox: Mailbox::Inbox,
                 limit: 20,
                 offset: 0,
             })
@@ -557,6 +636,116 @@ mod tests {
                 .value,
             "Snapshot Subject"
         );
+    }
+
+    #[tokio::test]
+    async fn mailbox_filtering_keeps_archive_out_of_inbox_and_tag_counts() {
+        let repo = SqlxRepository::init_pool_in_memory().await.unwrap();
+        repo.ingest_message(inbound_record("msg-inbox", "att-inbox", "<msg-inbox>"))
+            .await
+            .unwrap();
+        repo.ingest_message(inbound_record(
+            "msg-archive",
+            "att-archive",
+            "<msg-archive>",
+        ))
+        .await
+        .unwrap();
+
+        let archived = repo
+            .update_message_mailbox("msg-archive", Mailbox::Archive)
+            .await
+            .unwrap();
+        assert!(archived);
+
+        let inbox_page = repo
+            .list_messages(ListMessagesQuery {
+                tag_id: None,
+                mailbox: Mailbox::Inbox,
+                limit: 20,
+                offset: 0,
+            })
+            .await
+            .unwrap();
+        assert_eq!(inbox_page.total, 1);
+        assert_eq!(inbox_page.items[0].id, "msg-inbox");
+        assert_eq!(inbox_page.items[0].mailbox, Mailbox::Inbox);
+
+        let archive_page = repo
+            .list_messages(ListMessagesQuery {
+                tag_id: None,
+                mailbox: Mailbox::Archive,
+                limit: 20,
+                offset: 0,
+            })
+            .await
+            .unwrap();
+        assert_eq!(archive_page.total, 1);
+        assert_eq!(archive_page.items[0].id, "msg-archive");
+        assert_eq!(archive_page.items[0].mailbox, Mailbox::Archive);
+
+        let tagged_inbox = repo
+            .list_messages(ListMessagesQuery {
+                tag_id: Some(1),
+                mailbox: Mailbox::Inbox,
+                limit: 20,
+                offset: 0,
+            })
+            .await
+            .unwrap();
+        assert_eq!(tagged_inbox.total, 1);
+        assert_eq!(tagged_inbox.items[0].id, "msg-inbox");
+
+        let tags = repo.list_tags().await.unwrap();
+        let recipient_tag = tags
+            .iter()
+            .find(|tag| tag.kind == "recipient_address")
+            .unwrap();
+        assert_eq!(recipient_tag.message_count, Some(1));
+    }
+
+    #[tokio::test]
+    async fn update_message_mailbox_reports_missing_messages() {
+        let repo = SqlxRepository::init_pool_in_memory().await.unwrap();
+
+        let updated = repo
+            .update_message_mailbox("missing", Mailbox::Archive)
+            .await
+            .unwrap();
+
+        assert!(!updated);
+    }
+
+    #[tokio::test]
+    async fn delete_message_removes_database_graph_and_returns_blob_paths() {
+        let repo = SqlxRepository::init_pool_in_memory().await.unwrap();
+        repo.ingest_message(inbound_record("msg-1", "att-1", "<msg-1>"))
+            .await
+            .unwrap();
+
+        let deleted = repo.delete_message("msg-1").await.unwrap().unwrap();
+
+        assert_eq!(deleted.raw_path, "/tmp/msg-1.eml");
+        assert_eq!(deleted.attachment_paths, vec!["/tmp/att-1.txt"]);
+        assert!(repo.get_message("msg-1").await.unwrap().is_none());
+        assert!(repo.get_message_raw("msg-1").await.unwrap().is_none());
+        assert!(
+            repo.get_attachment_download("att-1")
+                .await
+                .unwrap()
+                .is_none()
+        );
+
+        let page = repo
+            .list_messages(ListMessagesQuery {
+                tag_id: None,
+                mailbox: Mailbox::Inbox,
+                limit: 20,
+                offset: 0,
+            })
+            .await
+            .unwrap();
+        assert_eq!(page.total, 0);
     }
 
     #[tokio::test]

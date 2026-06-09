@@ -2,8 +2,9 @@ use axum::Json;
 use utoipa::OpenApi;
 
 use crate::models::{
-    AttachmentMeta, ErrorResponse, HeaderEntry, InboundMetadata, InboundResponse, MessageDetail,
-    MessageDetailResponse, MessageHeadersResponse, MessageListResponse, MessageSummary, Tag,
+    AttachmentMeta, ErrorResponse, HeaderEntry, InboundMetadata, InboundResponse, Mailbox,
+    MailboxUpdateRequest, MessageDetail, MessageDetailResponse, MessageHeadersResponse,
+    MessageListResponse, MessageSummary, Tag,
 };
 
 #[allow(dead_code)]
@@ -21,6 +22,8 @@ pub(crate) struct InboundMultipartRequest {
         crate::routes::inbound::handler,
         crate::routes::messages::list,
         crate::routes::messages::detail,
+        crate::routes::messages::update_mailbox,
+        crate::routes::messages::delete,
         crate::routes::messages::raw_download,
         crate::routes::messages::headers,
         crate::routes::attachments::download,
@@ -33,6 +36,8 @@ pub(crate) struct InboundMultipartRequest {
         InboundMetadata,
         InboundMultipartRequest,
         InboundResponse,
+        Mailbox,
+        MailboxUpdateRequest,
         MessageDetail,
         MessageDetailResponse,
         MessageHeadersResponse,

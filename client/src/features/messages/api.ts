@@ -1,7 +1,8 @@
 import { apiClient } from '../../api/core/client';
 import { resolveApiBaseUrl } from '../../api/core/config';
-import { executeJson } from '../../api/core/response';
+import { executeJson, executeVoid } from '../../api/core/response';
 import type {
+  Mailbox,
   MessageDetailResponse,
   MessageHeadersResponse,
   MessageListQuery,
@@ -27,6 +28,23 @@ export function getMessageDetail(id: string): Promise<MessageDetailResponse> {
 export function getMessageHeaders(id: string): Promise<MessageHeadersResponse> {
   return executeJson(
     apiClient.GET('/api/messages/{id}/headers', {
+      params: { path: { id } },
+    }),
+  );
+}
+
+export function updateMessageMailbox(id: string, mailbox: Mailbox): Promise<void> {
+  return executeVoid(
+    apiClient.PATCH('/api/messages/{id}/mailbox', {
+      params: { path: { id } },
+      body: { mailbox },
+    }),
+  );
+}
+
+export function deleteMessage(id: string): Promise<void> {
+  return executeVoid(
+    apiClient.DELETE('/api/messages/{id}', {
       params: { path: { id } },
     }),
   );

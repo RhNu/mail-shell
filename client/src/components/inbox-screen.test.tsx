@@ -5,6 +5,8 @@ import { InboxScreen } from './inbox-screen';
 
 const messagesListHookState = vi.hoisted(() => ({
   refetch: vi.fn(),
+  updateMailbox: vi.fn(),
+  deleteMessage: vi.fn(),
 }));
 
 vi.mock('../features/messages/queries', () => ({
@@ -39,6 +41,14 @@ vi.mock('../features/messages/queries', () => ({
     error: undefined,
     refetch: messagesListHookState.refetch,
   }),
+  useUpdateMessageMailbox: () => ({
+    mutate: messagesListHookState.updateMailbox,
+    isPending: false,
+  }),
+  useDeleteMessage: () => ({
+    mutate: messagesListHookState.deleteMessage,
+    isPending: false,
+  }),
 }));
 
 function buildMessage(id: string, subject: string) {
@@ -47,6 +57,8 @@ function buildMessage(id: string, subject: string) {
     subject,
     from_address: 'sender@example.com',
     to_address: 'recipient@example.com',
+    envelope_to: 'recipient@example.com',
+    mailbox: 'inbox',
     created_at: '2026-06-05T10:30:00.000Z',
   };
 }
@@ -66,7 +78,10 @@ function TestHarness() {
 
 describe('InboxScreen', () => {
   beforeEach(() => {
+    vi.restoreAllMocks();
     vi.stubGlobal('scrollTo', vi.fn());
+    messagesListHookState.updateMailbox.mockReset();
+    messagesListHookState.deleteMessage.mockReset();
   });
 
   it('resets pagination when the backing query changes', async () => {
@@ -80,5 +95,30 @@ describe('InboxScreen', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Switch tag' }));
     expect(screen.getByText('Tag 2 first page')).toBeInTheDocument();
     expect(screen.queryByText('No messages yet')).not.toBeInTheDocument();
+  });
+
+  it('archives an inbox message from the list action menu', async () => {
+    render(() => <InboxScreen title={<h1>Inbox</h1>} query={() => ({ mailbox: 'inbox' })} />);
+
+    await fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
+    await fireEvent.click(await screen.findByRole('menuitem', { name: '归档' }));
+
+    expect(messagesListHookState.updateMailbox).toHaveBeenCalledWith({
+      id: 'msg-page-1',
+      mailbox: 'archive',
+    });
+  });
+
+  it('permanently deletes a message from the list action menu after confirmation', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    render(() => <InboxScreen title={<h1>Inbox</h1>} query={() => ({ mailbox: 'inbox' })} />);
+
+    await fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
+    await fireEvent.click(await screen.findByRole('menuitem', { name: '永久删除' }));
+
+    expect(messagesListHookState.deleteMessage).toHaveBeenCalledWith({
+      id: 'msg-page-1',
+    });
   });
 });

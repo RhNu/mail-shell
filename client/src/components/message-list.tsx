@@ -1,5 +1,5 @@
 import { createMemo, type JSX, For } from 'solid-js';
-import type { MessageSummary } from '../features/messages/models';
+import type { Mailbox, MessageSummary } from '../features/messages/models';
 import type { Tag } from '../features/tags/api';
 import { MessageListItem } from './message-list-item';
 
@@ -9,6 +9,11 @@ export type MessageListProps = {
   attachmentCounts: Map<string, number>;
   activeMessageId?: string;
   searchQuery: string;
+  returnTo: string;
+  // eslint-disable-next-line no-unused-vars
+  onMoveToMailbox?: (_id: string, _mailbox: Mailbox) => void;
+  // eslint-disable-next-line no-unused-vars
+  onDelete?: (_id: string) => void;
 };
 
 export function MessageList(props: MessageListProps): JSX.Element {
@@ -33,6 +38,9 @@ export function MessageList(props: MessageListProps): JSX.Element {
             tags={props.tagsMap.get(message.id) ?? []}
             attachmentCount={props.attachmentCounts.get(message.id)}
             active={message.id === props.activeMessageId}
+            returnTo={props.returnTo}
+            onMoveToMailbox={props.onMoveToMailbox}
+            onDelete={props.onDelete}
           />
         )}
       </For>

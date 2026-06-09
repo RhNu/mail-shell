@@ -26,7 +26,7 @@ export function TaggedInboxRoute() {
           </h1>
         </div>
       }
-      query={() => ({ tag: tagId() })}
+      query={() => ({ tag: tagId(), mailbox: 'inbox' })}
       tagChip={tag() ? <TagChip label={tag()!.label} active /> : undefined}
       emptyDescription="没有符合此标签的邮件。"
     />

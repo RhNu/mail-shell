@@ -8,7 +8,8 @@ use serde::Deserialize;
 
 use crate::error::AppError;
 use crate::models::{
-    ErrorResponse, MessageDetailResponse, MessageHeadersResponse, MessageListResponse,
+    ErrorResponse, Mailbox, MailboxUpdateRequest, MessageDetailResponse, MessageHeadersResponse,
+    MessageListResponse,
 };
 use crate::repository::ListMessagesQuery;
 use crate::routes::AppState;
@@ -18,6 +19,7 @@ pub struct ListQuery {
     page: Option<u32>,
     limit: Option<u32>,
     tag: Option<i64>,
+    mailbox: Option<Mailbox>,
 }
 
 #[utoipa::path(
@@ -27,7 +29,8 @@ pub struct ListQuery {
     params(
         ("page" = Option<u32>, Query, description = "1-based page number"),
         ("limit" = Option<u32>, Query, description = "Page size between 1 and 100"),
-        ("tag" = Option<i64>, Query, description = "Filter by tag id")
+        ("tag" = Option<i64>, Query, description = "Filter by tag id"),
+        ("mailbox" = Option<Mailbox>, Query, description = "Filter by mailbox; defaults to inbox")
     ),
     responses(
         (status = 200, description = "Paginated message list", body = MessageListResponse),
@@ -47,6 +50,7 @@ pub async fn list(
         .repo
         .list_messages(ListMessagesQuery {
             tag_id: query.tag,
+            mailbox: query.mailbox.unwrap_or_default(),
             limit: limit as i64,
             offset,
         })
@@ -98,6 +102,75 @@ pub async fn detail(
         message: message.message,
         attachments: message.attachments,
     }))
+}
+
+#[utoipa::path(
+    patch,
+    path = "/api/messages/{id}/mailbox",
+    operation_id = "updateMessageMailbox",
+    params(("id" = String, Path, description = "Message id")),
+    request_body = MailboxUpdateRequest,
+    responses(
+        (status = 204, description = "Message mailbox updated"),
+        (status = 404, description = "Message not found", body = ErrorResponse),
+        (status = 500, description = "Repository failure", body = ErrorResponse)
+    )
+)]
+#[tracing::instrument(skip(state))]
+pub async fn update_mailbox(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(request): Json<MailboxUpdateRequest>,
+) -> Result<axum::http::StatusCode, AppError> {
+    let updated = state
+        .repo
+        .update_message_mailbox(&id, request.mailbox)
+        .await?;
+    if !updated {
+        return Err(AppError::NotFound);
+    }
+
+    tracing::debug!(message_id = %id, mailbox = %request.mailbox, "updated message mailbox");
+    Ok(axum::http::StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(
+    delete,
+    path = "/api/messages/{id}",
+    operation_id = "deleteMessage",
+    params(("id" = String, Path, description = "Message id")),
+    responses(
+        (status = 204, description = "Message permanently deleted"),
+        (status = 404, description = "Message not found", body = ErrorResponse),
+        (status = 500, description = "Repository failure", body = ErrorResponse)
+    )
+)]
+#[tracing::instrument(skip(state))]
+pub async fn delete(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<axum::http::StatusCode, AppError> {
+    let files = state
+        .repo
+        .delete_message(&id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+
+    remove_blob_file(&files.raw_path).await;
+    for path in files.attachment_paths {
+        remove_blob_file(&path).await;
+    }
+
+    tracing::debug!(message_id = %id, "permanently deleted message");
+    Ok(axum::http::StatusCode::NO_CONTENT)
+}
+
+async fn remove_blob_file(path: &str) {
+    match tokio::fs::remove_file(path).await {
+        Ok(()) => {}
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+        Err(err) => tracing::warn!(path, error = %err, "failed to delete message blob"),
+    }
 }
 
 #[utoipa::path(
@@ -251,6 +324,7 @@ mod tests {
             page: Some(1),
             limit: Some(2),
             tag: None,
+            mailbox: None,
         };
         let res = list(State(state), Query(query)).await.unwrap();
         assert_eq!(res.total, 5);
@@ -295,6 +369,7 @@ mod tests {
             page: None,
             limit: None,
             tag: Some(1),
+            mailbox: None,
         };
         let res = list(State(state), Query(query)).await.unwrap();
         assert_eq!(res.total, 1);

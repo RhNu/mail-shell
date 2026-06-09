@@ -7,7 +7,12 @@ import { AttachmentList } from '../../components/attachment-list';
 import { MessageActionMenu } from '../../components/message-action-menu';
 import { RawHeadersDialog } from '../../components/raw-headers-dialog';
 import { sanitizeEmailHtml } from '../../lib/html-sanitize';
-import { HttpResponseError } from '../../api/core/errors';
+import {
+  backLabel,
+  useDetailActions,
+  useDetailReturn,
+  type Mailbox,
+} from './message-detail-actions';
 
 function MessageMeta(props: { from: string; to: string; createdAt: string }) {
   return (
@@ -98,6 +103,10 @@ function MessageLoadedState(props: {
   remoteResourcesBlocked: boolean;
   onLoadRemoteResources: () => void;
   onViewHeaders: () => void;
+  // eslint-disable-next-line no-unused-vars
+  onMoveToMailbox: (_mailbox: Mailbox) => void;
+  onDelete: () => void;
+  actionsDisabled: boolean;
 }) {
   return (
     <>
@@ -109,7 +118,14 @@ function MessageLoadedState(props: {
           >
             {props.query.data!.subject ?? '（无主题）'}
           </h1>
-          <MessageActionMenu messageId={props.query.data!.id} onViewHeaders={props.onViewHeaders} />
+          <MessageActionMenu
+            messageId={props.query.data!.id}
+            mailbox={props.query.data!.mailbox}
+            onViewHeaders={props.onViewHeaders}
+            onMoveToMailbox={props.onMoveToMailbox}
+            onDelete={props.onDelete}
+            disabled={props.actionsDisabled}
+          />
         </div>
         <MessageMeta
           from={props.query.data!.from_address}
@@ -136,6 +152,10 @@ function MessageDetailContent(props: {
   remoteResourcesBlocked: boolean;
   onLoadRemoteResources: () => void;
   onViewHeaders: () => void;
+  // eslint-disable-next-line no-unused-vars
+  onMoveToMailbox: (_mailbox: Mailbox) => void;
+  onDelete: () => void;
+  actionsDisabled: boolean;
 }) {
   return (
     <>
@@ -149,6 +169,9 @@ function MessageDetailContent(props: {
           remoteResourcesBlocked={props.remoteResourcesBlocked}
           onLoadRemoteResources={props.onLoadRemoteResources}
           onViewHeaders={props.onViewHeaders}
+          onMoveToMailbox={props.onMoveToMailbox}
+          onDelete={props.onDelete}
+          actionsDisabled={props.actionsDisabled}
         />
       ) : props.notFound ? (
         <EmptyState title="邮件未找到" description="您查找的邮件不存在或已被移除。" />
@@ -159,13 +182,13 @@ function MessageDetailContent(props: {
   );
 }
 
-function BackToInboxLink() {
+function BackLink(props: { href: string; label: string }) {
   return (
     <a
-      href="#/"
+      href={`#${props.href}`}
       class="inline-flex w-fit items-center gap-1.5 text-sm text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
     >
-      <ArrowLeft size={16} /> 返回收件箱
+      <ArrowLeft size={16} /> {props.label}
     </a>
   );
 }
@@ -203,6 +226,8 @@ function MessageHeadersDialogMount(props: {
 export function MessageDetailRoute() {
   const params = useParams<{ messageId: string }>();
   const query = useMessageDetail(() => params.messageId);
+  const { returnTo, navigateBack } = useDetailReturn();
+  const actions = useDetailActions(() => params.messageId, navigateBack);
   const [allowRemoteResources, setAllowRemoteResources] = createSignal(false);
   const [showHeadersDialog, setShowHeadersDialog] = createSignal(false);
   const sanitizedHtml = createMemo(() =>
@@ -211,8 +236,7 @@ export function MessageDetailRoute() {
     }),
   );
   const bodyText = () => query.data?.body_text;
-  const isNotFound = () =>
-    query.isError && query.error instanceof HttpResponseError && query.error.status === 404;
+  const isNotFound = () => query.isError && hasHttpStatus(query.error, 404);
 
   createEffect(
     on(
@@ -226,8 +250,9 @@ export function MessageDetailRoute() {
 
   return (
     <section aria-labelledby="message-detail-heading" class="flex flex-col gap-6">
-      <BackToInboxLink />
+      <BackLink href={returnTo()} label={backLabel(returnTo())} />
       <MessageDetailError query={query} notFound={isNotFound()} />
+      <Show when={actions.errorMessage()}>{(message) => <ErrorBanner message={message()} />}</Show>
       <MessageDetailContent
         query={query}
         html={() => sanitizedHtml().html}
@@ -236,6 +261,9 @@ export function MessageDetailRoute() {
         remoteResourcesBlocked={sanitizedHtml().hasBlockedRemoteResources}
         onLoadRemoteResources={() => setAllowRemoteResources(true)}
         onViewHeaders={() => setShowHeadersDialog(true)}
+        onMoveToMailbox={actions.moveToMailbox}
+        onDelete={actions.deleteMessage}
+        actionsDisabled={actions.isPending()}
       />
       <MessageHeadersDialogMount
         query={query}
@@ -243,5 +271,14 @@ export function MessageDetailRoute() {
         onClose={() => setShowHeadersDialog(false)}
       />
     </section>
+  );
+}
+
+function hasHttpStatus(error: unknown, status: number): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'status' in error &&
+    (error as { status?: unknown }).status === status
   );
 }

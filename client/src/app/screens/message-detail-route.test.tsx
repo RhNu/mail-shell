@@ -1,6 +1,6 @@
 import { Route, HashRouter } from '@solidjs/router';
-import { fireEvent, render, screen } from '@solidjs/testing-library';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { beforeEach, expect, it, vi } from 'vitest';
 import { HttpResponseError, NetworkRequestError } from '../../api/core/errors';
 import { MessageDetailRoute } from './message-detail-route';
 
@@ -15,6 +15,7 @@ type MockMessageDetailQuery = {
     to_address?: string | null;
     envelope_to: string;
     created_at: string;
+    mailbox: 'inbox' | 'archive';
     body_text: string;
     body_html: string;
     attachments: Array<{ id: string }>;
@@ -30,6 +31,18 @@ const messageDetailQueryState = vi.hoisted(() => ({
     data: undefined,
     refetch: vi.fn(),
   } as MockMessageDetailQuery,
+  updateMailbox: vi.fn(),
+  deleteMessage: vi.fn(),
+  updateMailboxState: {
+    isPending: false,
+    isError: false,
+    error: undefined as Error | undefined,
+  },
+  deleteMessageState: {
+    isPending: false,
+    isError: false,
+    error: undefined as Error | undefined,
+  },
 }));
 
 vi.mock('../../features/messages/queries', () => ({
@@ -39,6 +52,30 @@ vi.mock('../../features/messages/queries', () => ({
     isError: false,
     error: undefined,
     data: { headers: [] },
+  }),
+  useUpdateMessageMailbox: () => ({
+    mutate: messageDetailQueryState.updateMailbox,
+    get isPending() {
+      return messageDetailQueryState.updateMailboxState.isPending;
+    },
+    get isError() {
+      return messageDetailQueryState.updateMailboxState.isError;
+    },
+    get error() {
+      return messageDetailQueryState.updateMailboxState.error;
+    },
+  }),
+  useDeleteMessage: () => ({
+    mutate: messageDetailQueryState.deleteMessage,
+    get isPending() {
+      return messageDetailQueryState.deleteMessageState.isPending;
+    },
+    get isError() {
+      return messageDetailQueryState.deleteMessageState.isError;
+    },
+    get error() {
+      return messageDetailQueryState.deleteMessageState.error;
+    },
   }),
 }));
 
@@ -59,6 +96,7 @@ const baseMessageDetailData = {
   to_address: 'bob@example.com',
   envelope_to: 'delivered@example.com',
   created_at: '2026-06-05T10:30:00.000Z',
+  mailbox: 'inbox' as const,
   body_text: 'Plain fallback',
   body_html: '<p>Hello</p>',
   attachments: [],
@@ -97,50 +135,130 @@ function setMissingToHeaderQuery() {
   };
 }
 
-describe('MessageDetailRoute', () => {
-  beforeEach(() => {
-    setSuccessQuery();
+beforeEach(() => {
+  vi.restoreAllMocks();
+  vi.stubGlobal('scrollTo', vi.fn());
+  setSuccessQuery();
+  messageDetailQueryState.updateMailbox.mockReset();
+  messageDetailQueryState.deleteMessage.mockReset();
+  messageDetailQueryState.updateMailboxState = {
+    isPending: false,
+    isError: false,
+    error: undefined,
+  };
+  messageDetailQueryState.deleteMessageState = {
+    isPending: false,
+    isError: false,
+    error: undefined,
+  };
+});
+
+it('gates remote resources behind an explicit user action', async () => {
+  setSuccessQuery('<p>Hello</p><img src="https://tracker.test/pixel.png" alt="Tracker pixel" />');
+
+  const view = renderRoute();
+
+  expect(screen.getByRole('button', { name: '加载远程资源' })).toBeInTheDocument();
+  expect(view.container.querySelector('img')).toBeNull();
+
+  await fireEvent.click(screen.getByRole('button', { name: '加载远程资源' }));
+
+  expect(screen.queryByRole('button', { name: '加载远程资源' })).not.toBeInTheDocument();
+  expect(view.container.querySelector('img')?.getAttribute('src')).toBe(
+    'https://tracker.test/pixel.png',
+  );
+});
+
+it('falls back to the envelope recipient when the To header is missing', () => {
+  setMissingToHeaderQuery();
+
+  renderRoute();
+
+  expect(screen.getByText('delivered@example.com')).toBeInTheDocument();
+});
+
+it('shows the retry banner without a not-found empty state for network errors', () => {
+  setErrorQuery(new NetworkRequestError('offline'));
+
+  renderRoute();
+
+  expect(screen.getByText('offline')).toBeInTheDocument();
+  expect(screen.queryByText('邮件未找到')).not.toBeInTheDocument();
+});
+
+it('renders the not-found state for 404 responses', () => {
+  setErrorQuery(new HttpResponseError(404, 'Not Found', { error: 'message missing' }));
+
+  renderRoute();
+
+  expect(screen.getByText('邮件未找到')).toBeInTheDocument();
+  expect(screen.queryByText('message missing')).not.toBeInTheDocument();
+});
+
+it('uses returnTo search param for the back link', () => {
+  renderRoute('/messages/msg-1?returnTo=%2Farchive');
+
+  expect(screen.getByRole('link', { name: /返回/u })).toHaveAttribute('href', '#/archive');
+});
+
+it('restores archived messages from the action menu', async () => {
+  messageDetailQueryState.value = {
+    ...messageDetailQueryState.value,
+    data: {
+      ...baseMessageDetailData,
+      mailbox: 'archive',
+    },
+  };
+
+  renderRoute();
+
+  await fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
+  await fireEvent.click(await screen.findByRole('menuitem', { name: '移回收件箱' }));
+
+  expect(messageDetailQueryState.updateMailbox).toHaveBeenCalled();
+  expect(messageDetailQueryState.updateMailbox.mock.calls[0][0]).toEqual({
+    id: 'msg-1',
+    mailbox: 'inbox',
+  });
+});
+
+it('shows detail action errors and disables actions while pending', () => {
+  messageDetailQueryState.updateMailboxState = {
+    isPending: true,
+    isError: true,
+    error: new Error('归档失败'),
+  };
+
+  renderRoute();
+
+  expect(screen.getByText('归档失败')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '更多操作' })).toBeDisabled();
+});
+
+it('returns to the source route after a mailbox action succeeds', async () => {
+  messageDetailQueryState.updateMailbox.mockImplementation((_variables, options) => {
+    options.onSuccess();
   });
 
-  it('gates remote resources behind an explicit user action', async () => {
-    setSuccessQuery('<p>Hello</p><img src="https://tracker.test/pixel.png" alt="Tracker pixel" />');
+  renderRoute('/messages/msg-1?returnTo=%2Farchive');
 
-    const view = renderRoute();
+  await fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
+  await fireEvent.click(await screen.findByRole('menuitem', { name: '归档' }));
 
-    expect(screen.getByRole('button', { name: '加载远程资源' })).toBeInTheDocument();
-    expect(view.container.querySelector('img')).toBeNull();
+  await waitFor(() => expect(window.location.hash).toBe('#/archive'));
+});
 
-    await fireEvent.click(screen.getByRole('button', { name: '加载远程资源' }));
-
-    expect(screen.queryByRole('button', { name: '加载远程资源' })).not.toBeInTheDocument();
-    expect(view.container.querySelector('img')?.getAttribute('src')).toBe(
-      'https://tracker.test/pixel.png',
-    );
+it('deletes from detail after confirmation and returns to the source route', async () => {
+  vi.spyOn(window, 'confirm').mockReturnValue(true);
+  messageDetailQueryState.deleteMessage.mockImplementation((_variables, options) => {
+    options.onSuccess();
   });
 
-  it('falls back to the envelope recipient when the To header is missing', () => {
-    setMissingToHeaderQuery();
+  renderRoute('/messages/msg-1?returnTo=%2Ftags%2F7');
 
-    renderRoute();
+  await fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
+  await fireEvent.click(await screen.findByRole('menuitem', { name: '永久删除' }));
 
-    expect(screen.getByText('delivered@example.com')).toBeInTheDocument();
-  });
-
-  it('shows the retry banner without a not-found empty state for network errors', () => {
-    setErrorQuery(new NetworkRequestError('offline'));
-
-    renderRoute();
-
-    expect(screen.getByText('offline')).toBeInTheDocument();
-    expect(screen.queryByText('邮件未找到')).not.toBeInTheDocument();
-  });
-
-  it('renders the not-found state for 404 responses', () => {
-    setErrorQuery(new HttpResponseError(404, 'Not Found', { error: 'message missing' }));
-
-    renderRoute();
-
-    expect(screen.getByText('邮件未找到')).toBeInTheDocument();
-    expect(screen.queryByText('message missing')).not.toBeInTheDocument();
-  });
+  expect(messageDetailQueryState.deleteMessage.mock.calls[0][0]).toEqual({ id: 'msg-1' });
+  await waitFor(() => expect(window.location.hash).toBe('#/tags/7'));
 });

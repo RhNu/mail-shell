@@ -10,6 +10,10 @@ vi.mock('./app/screens/inbox-route', () => ({
   InboxRoute: () => <h1>Inbox screen</h1>,
 }));
 
+vi.mock('./app/screens/archive-route', () => ({
+  ArchiveRoute: () => <h1>Archive screen</h1>,
+}));
+
 vi.mock('./app/screens/message-detail-route', () => ({
   MessageDetailRoute: () => <h1>Message detail screen</h1>,
 }));
@@ -50,6 +54,12 @@ describe('App routes', () => {
     expect(
       await screen.findByRole('heading', { name: 'Message detail screen' }),
     ).toBeInTheDocument();
+  });
+
+  it('renders the archive route', async () => {
+    renderApp('/archive');
+
+    expect(await screen.findByRole('heading', { name: 'Archive screen' })).toBeInTheDocument();
   });
 
   it('renders the tag inbox route for a selected tag', async () => {

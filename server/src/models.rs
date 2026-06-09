@@ -2,6 +2,65 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum Mailbox {
+    Inbox,
+    Archive,
+}
+
+impl Default for Mailbox {
+    fn default() -> Self {
+        Self::Inbox
+    }
+}
+
+impl Mailbox {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Inbox => "inbox",
+            Self::Archive => "archive",
+        }
+    }
+}
+
+impl std::fmt::Display for Mailbox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for Mailbox {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "inbox" => Ok(Self::Inbox),
+            "archive" => Ok(Self::Archive),
+            _ => Err(format!("invalid mailbox value: {value}")),
+        }
+    }
+}
+
+impl sqlx::Type<sqlx::Sqlite> for Mailbox {
+    fn type_info() -> <sqlx::Sqlite as sqlx::Database>::TypeInfo {
+        <String as sqlx::Type<sqlx::Sqlite>>::type_info()
+    }
+
+    fn compatible(ty: &<sqlx::Sqlite as sqlx::Database>::TypeInfo) -> bool {
+        <String as sqlx::Type<sqlx::Sqlite>>::compatible(ty)
+    }
+}
+
+impl<'r> sqlx::Decode<'r, sqlx::Sqlite> for Mailbox {
+    fn decode(
+        value: <sqlx::Sqlite as sqlx::Database>::ValueRef<'r>,
+    ) -> Result<Self, sqlx::error::BoxDynError> {
+        let value = <String as sqlx::Decode<sqlx::Sqlite>>::decode(value)?;
+        value.parse().map_err(Into::into)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct InboundMetadata {
     pub envelope_to: String,
@@ -18,6 +77,7 @@ pub struct MessageSummary {
     pub subject: String,
     pub date: Option<String>,
     pub message_id: Option<String>,
+    pub mailbox: Mailbox,
     pub created_at: DateTime<Utc>,
 }
 
@@ -35,6 +95,7 @@ pub struct MessageDetail {
     pub subject: String,
     pub date: Option<String>,
     pub message_id: Option<String>,
+    pub mailbox: Mailbox,
     pub body_text: Option<String>,
     pub body_html: Option<String>,
     pub created_at: DateTime<Utc>,
@@ -107,4 +168,9 @@ pub struct HeaderEntry {
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct MessageHeadersResponse {
     pub headers: Vec<HeaderEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct MailboxUpdateRequest {
+    pub mailbox: Mailbox,
 }

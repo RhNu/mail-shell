@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use mail_shell_server::models::InboundMetadata;
+use mail_shell_server::models::{InboundMetadata, Mailbox};
 use mail_shell_server::repository::{
     InboundAttachmentRecord, InboundMessageRecord, InboundTagRecord, ListMessagesQuery, Repository,
     sqlx::SqlxRepository,
@@ -72,6 +72,7 @@ async fn aggregate_ingest_persists_message_graph() {
     let page = repo
         .list_messages(ListMessagesQuery {
             tag_id: None,
+            mailbox: Mailbox::Inbox,
             limit: 20,
             offset: 0,
         })
@@ -104,6 +105,7 @@ async fn aggregate_ingest_rolls_back_on_duplicate_message_id() {
     let page = repo
         .list_messages(ListMessagesQuery {
             tag_id: None,
+            mailbox: Mailbox::Inbox,
             limit: 20,
             offset: 0,
         })

@@ -84,7 +84,7 @@ export interface paths {
     get: operations['getMessageDetail'];
     put?: never;
     post?: never;
-    delete?: never;
+    delete: operations['deleteMessage'];
     options?: never;
     head?: never;
     patch?: never;
@@ -104,6 +104,22 @@ export interface paths {
     options?: never;
     head?: never;
     patch?: never;
+    trace?: never;
+  };
+  '/api/messages/{id}/mailbox': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch: operations['updateMessageMailbox'];
     trace?: never;
   };
   '/api/messages/{id}/raw': {
@@ -173,6 +189,11 @@ export interface components {
     InboundResponse: {
       id: string;
     };
+    /** @enum {string} */
+    Mailbox: 'inbox' | 'archive';
+    MailboxUpdateRequest: {
+      mailbox: components['schemas']['Mailbox'];
+    };
     MessageDetail: {
       body_html?: string | null;
       body_text?: string | null;
@@ -185,6 +206,7 @@ export interface components {
       from_name?: string | null;
       id: string;
       in_reply_to?: string | null;
+      mailbox: components['schemas']['Mailbox'];
       message_id?: string | null;
       reply_to?: string | null;
       subject: string;
@@ -214,6 +236,7 @@ export interface components {
       from_address: string;
       from_name?: string | null;
       id: string;
+      mailbox: components['schemas']['Mailbox'];
       message_id?: string | null;
       subject: string;
       to_address?: string | null;
@@ -351,6 +374,8 @@ export interface operations {
         limit?: number;
         /** @description Filter by tag id */
         tag?: number;
+        /** @description Filter by mailbox; defaults to inbox */
+        mailbox?: components['schemas']['Mailbox'];
       };
       header?: never;
       path?: never;
@@ -419,6 +444,45 @@ export interface operations {
       };
     };
   };
+  deleteMessage: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Message id */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Message permanently deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Message not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorResponse'];
+        };
+      };
+      /** @description Repository failure */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorResponse'];
+        };
+      };
+    };
+  };
   getMessageHeaders: {
     parameters: {
       query?: never;
@@ -450,6 +514,49 @@ export interface operations {
         };
       };
       /** @description Storage or repository failure */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorResponse'];
+        };
+      };
+    };
+  };
+  updateMessageMailbox: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Message id */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['MailboxUpdateRequest'];
+      };
+    };
+    responses: {
+      /** @description Message mailbox updated */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Message not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorResponse'];
+        };
+      };
+      /** @description Repository failure */
       500: {
         headers: {
           [name: string]: unknown;

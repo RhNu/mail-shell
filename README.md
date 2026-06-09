@@ -165,8 +165,10 @@ Full CI details: [`docs/deployment-and-ci.md`](docs/deployment-and-ci.md).
 |---|---|---|
 | GET | `/api/healthz` | Health check |
 | POST | `/api/inbound` | Ingest raw MIME + metadata (multipart) |
-| GET | `/api/messages` | Paginated message list, optional tag filter |
+| GET | `/api/messages` | Paginated message list, optional tag and mailbox filters |
 | GET | `/api/messages/{id}` | Full message detail + attachments |
+| PATCH | `/api/messages/{id}/mailbox` | Move a message between `inbox` and `archive` |
+| DELETE | `/api/messages/{id}` | Permanently delete a message and its stored blobs |
 | GET | `/api/messages/{id}/headers` | Parsed top-level message headers from the stored snapshot |
 | GET | `/api/messages/{id}/raw` | Raw EML download |
 | GET | `/api/attachments/{id}` | Binary attachment download |

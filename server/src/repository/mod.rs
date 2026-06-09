@@ -2,7 +2,7 @@ use async_trait::async_trait;
 
 use crate::mime_parser::ParsedMailSnapshotV1;
 use crate::models::{
-    AttachmentDownloadMeta, AttachmentMeta, HeaderEntry, MessageDetail, MessageRawMeta,
+    AttachmentDownloadMeta, AttachmentMeta, HeaderEntry, Mailbox, MessageDetail, MessageRawMeta,
     MessageSummary, Tag,
 };
 
@@ -25,6 +25,7 @@ pub enum RepositoryError {
 #[derive(Debug, Clone)]
 pub struct ListMessagesQuery {
     pub tag_id: Option<i64>,
+    pub mailbox: Mailbox,
     pub limit: i64,
     pub offset: i64,
 }
@@ -39,6 +40,12 @@ pub struct MessagePage<T> {
 pub struct MessageRecord {
     pub message: MessageDetail,
     pub attachments: Vec<AttachmentMeta>,
+}
+
+#[derive(Debug, Clone)]
+pub struct DeletedMessageFiles {
+    pub raw_path: String,
+    pub attachment_paths: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -85,6 +92,17 @@ pub trait Repository: Send + Sync {
     ) -> Result<MessagePage<MessageSummary>, RepositoryError>;
 
     async fn get_message(&self, id: &str) -> Result<Option<MessageRecord>, RepositoryError>;
+
+    async fn update_message_mailbox(
+        &self,
+        id: &str,
+        mailbox: Mailbox,
+    ) -> Result<bool, RepositoryError>;
+
+    async fn delete_message(
+        &self,
+        id: &str,
+    ) -> Result<Option<DeletedMessageFiles>, RepositoryError>;
 
     async fn get_message_headers(
         &self,

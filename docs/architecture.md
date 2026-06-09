@@ -30,6 +30,8 @@ Blob data stays out of SQLite:
 - SQLite also stores a versioned parsed-mail snapshot for each message. The snapshot preserves ordered headers and non-attachment MIME structure; attachment nodes contain metadata and attachment ids but not attachment bytes.
 - Raw MIME files are written to the server data directory for archive/download only.
 - Attachments are written to the server data directory.
+- `messages.mailbox` tracks the user-facing message area. New mail starts in `inbox`;
+  archived mail moves to `archive` and can be restored to `inbox`.
 
 Message detail and header APIs read the persisted SQLite snapshot. They do not read or re-parse the raw `.eml` file. The raw file is only read by the raw-download endpoint.
 
@@ -57,6 +59,9 @@ The initial tag kinds are:
 - `sender_domain`
 
 This keeps filtering simple while preserving structured data for future expansion.
+
+Mailbox state is separate from tags. Tag-filtered inbox views and tag message counts only include
+messages whose mailbox is `inbox`; archived messages are shown from the archive view instead.
 
 ## Serving Model
 

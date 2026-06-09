@@ -1,6 +1,10 @@
 import { createEffect, createMemo, createSignal, type Accessor, type JSX } from 'solid-js';
-import { useMessagesList } from '../features/messages/queries';
-import type { MessageListQuery, MessageSummary } from '../features/messages/models';
+import {
+  useDeleteMessage,
+  useMessagesList,
+  useUpdateMessageMailbox,
+} from '../features/messages/queries';
+import type { Mailbox, MessageListQuery, MessageSummary } from '../features/messages/models';
 import { SearchInput, Pagination, EmptyState, ErrorBanner } from './ui';
 import { MessageList } from './message-list';
 import { MessageListSkeleton } from './message-list-skeleton';
@@ -25,8 +29,13 @@ function ListSection(props: {
   searchQuery: string;
   page: number;
   totalPages: number;
+  returnTo: string;
   // eslint-disable-next-line no-unused-vars
   onPageChange: (p: number) => void;
+  // eslint-disable-next-line no-unused-vars
+  onMoveToMailbox: (id: string, mailbox: Mailbox) => void;
+  // eslint-disable-next-line no-unused-vars
+  onDelete: (id: string) => void;
   emptyDescription?: string;
 }) {
   return (
@@ -40,6 +49,9 @@ function ListSection(props: {
             tagsMap={new Map()}
             attachmentCounts={new Map()}
             searchQuery={props.searchQuery}
+            returnTo={props.returnTo}
+            onMoveToMailbox={props.onMoveToMailbox}
+            onDelete={props.onDelete}
           />
           {props.totalPages > 1 && (
             <div class="pt-2">
@@ -89,22 +101,16 @@ function InboxToolbar(props: {
   );
 }
 
-export function InboxScreen(props: InboxScreenProps): JSX.Element {
-  const [page, setPage] = createSignal(1);
-  const [searchQuery, setSearchQuery] = createSignal('');
-  const queryKey = createMemo(() => JSON.stringify(props.query() ?? {}));
-  const messagesQuery = useMessagesList(() => ({
-    ...props.query(),
-    page: page(),
-    limit: DEFAULT_LIMIT,
-  }));
-  const totalPages = () =>
-    messagesQuery.data ? Math.ceil(messagesQuery.data.total / messagesQuery.data.limit) : 0;
+function MutationErrorBanner(props: { message?: string }) {
+  return <>{props.message && <ErrorBanner message={props.message} />}</>;
+}
 
-  createEffect(() => {
-    queryKey();
-    setPage(1);
-  });
+function scrollToTop() {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+export function InboxScreen(props: InboxScreenProps): JSX.Element {
+  const state = useInboxState(() => props.query());
 
   return (
     <section class="flex flex-col gap-4">
@@ -112,28 +118,75 @@ export function InboxScreen(props: InboxScreenProps): JSX.Element {
         title={props.title}
         subtitle={props.subtitle}
         tagChip={props.tagChip}
-        total={messagesQuery.data?.total}
-        searchQuery={searchQuery()}
-        onSearchChange={setSearchQuery}
+        total={state.messagesQuery.data?.total}
+        searchQuery={state.searchQuery()}
+        onSearchChange={state.setSearchQuery}
       />
-      {messagesQuery.isError && (
+      {state.messagesQuery.isError && (
         <ErrorBanner
-          message={messagesQuery.error?.message ?? '加载邮件失败'}
-          onRetry={() => messagesQuery.refetch()}
+          message={state.messagesQuery.error?.message ?? '加载邮件失败'}
+          onRetry={() => state.messagesQuery.refetch()}
         />
       )}
+      <MutationErrorBanner message={state.mutationErrorMessage()} />
       <ListSection
-        loading={messagesQuery.isLoading}
-        data={messagesQuery.data}
-        searchQuery={searchQuery()}
-        page={page()}
-        totalPages={totalPages()}
-        onPageChange={(newPage) => {
-          setPage(newPage);
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        }}
+        loading={state.messagesQuery.isLoading}
+        data={state.messagesQuery.data}
+        searchQuery={state.searchQuery()}
+        page={state.page()}
+        totalPages={state.totalPages()}
+        returnTo={currentHashPath()}
+        onPageChange={state.setPageAndScroll}
+        onMoveToMailbox={state.moveToMailbox}
+        onDelete={state.deleteMessage}
         emptyDescription={props.emptyDescription}
       />
     </section>
   );
+}
+
+function useInboxState(query: Accessor<MessageListQuery>) {
+  const [page, setPage] = createSignal(1);
+  const [searchQuery, setSearchQuery] = createSignal('');
+  const queryKey = createMemo(() => JSON.stringify(query() ?? {}));
+  const updateMailboxMutation = useUpdateMessageMailbox();
+  const deleteMessageMutation = useDeleteMessage();
+  const messagesQuery = useMessagesList(() => ({
+    ...query(),
+    page: page(),
+    limit: DEFAULT_LIMIT,
+  }));
+  const totalPages = () =>
+    messagesQuery.data ? Math.ceil(messagesQuery.data.total / messagesQuery.data.limit) : 0;
+  const mutationErrorMessage = () =>
+    updateMailboxMutation.isError || deleteMessageMutation.isError
+      ? (updateMailboxMutation.error?.message ??
+        deleteMessageMutation.error?.message ??
+        '更新邮件失败')
+      : undefined;
+
+  createEffect(() => {
+    queryKey();
+    setPage(1);
+  });
+
+  return {
+    page,
+    searchQuery,
+    setSearchQuery,
+    messagesQuery,
+    totalPages,
+    mutationErrorMessage,
+    setPageAndScroll: (newPage: number) => {
+      setPage(newPage);
+      scrollToTop();
+    },
+    moveToMailbox: (id: string, mailbox: Mailbox) => updateMailboxMutation.mutate({ id, mailbox }),
+    deleteMessage: (id: string) => deleteMessageMutation.mutate({ id }),
+  };
+}
+
+function currentHashPath(): string {
+  const path = window.location.hash.replace(/^#/u, '').split('?')[0];
+  return path || '/';
 }

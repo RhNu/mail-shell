@@ -2,7 +2,7 @@ import { createSignal, type JSX } from 'solid-js';
 import { useLocation } from '@solidjs/router';
 import { Dialog } from '@ark-ui/solid/dialog';
 import { Portal } from 'solid-js/web';
-import { Menu, X, Inbox } from 'lucide-solid';
+import { Archive, Menu, X, Inbox } from 'lucide-solid';
 import { ConnectivityBanner } from '../components/connectivity-banner';
 import { TagNav } from '../components/tag-nav';
 import { PwaUpdateController } from '../features/system/pwa-update-controller';
@@ -17,10 +17,27 @@ function navCls(active: boolean) {
   ].join(' ');
 }
 
-function MobileHeader() {
+function MainNav(props: { class?: string; onNavigate?: () => void }) {
   const location = useLocation();
-  const [open, setOpen] = createSignal(false);
   const isInboxActive = () => location.pathname === '/';
+  const isArchiveActive = () => location.pathname === '/archive';
+
+  return (
+    <nav aria-label="主导航" class={props.class}>
+      <a href="#/" class={navCls(isInboxActive())} onClick={() => props.onNavigate?.()}>
+        <Inbox size={18} />
+        <span>收件箱</span>
+      </a>
+      <a href="#/archive" class={navCls(isArchiveActive())} onClick={() => props.onNavigate?.()}>
+        <Archive size={18} />
+        <span>归档</span>
+      </a>
+    </nav>
+  );
+}
+
+function MobileHeader() {
+  const [open, setOpen] = createSignal(false);
   return (
     <header class="flex h-14 items-center justify-between border-b border-zinc-200 px-4 lg:hidden dark:border-zinc-800">
       <div class="text-sm font-semibold uppercase tracking-widest text-zinc-900 dark:text-zinc-100">
@@ -44,12 +61,7 @@ function MobileHeader() {
                   <span class="sr-only">关闭菜单</span>
                 </Dialog.CloseTrigger>
               </div>
-              <nav aria-label="主导航" class="flex flex-col gap-1">
-                <a href="#/" class={navCls(isInboxActive())} onClick={() => setOpen(false)}>
-                  <Inbox size={18} />
-                  <span>收件箱</span>
-                </a>
-              </nav>
+              <MainNav class="flex flex-col gap-1" onNavigate={() => setOpen(false)} />
               <div class="my-4 border-t border-zinc-200 dark:border-zinc-800" />
               <nav aria-label="标签">
                 <TagNav onNavigate={() => setOpen(false)} />
@@ -63,8 +75,6 @@ function MobileHeader() {
 }
 
 function DesktopSidebar() {
-  const location = useLocation();
-  const isInboxActive = () => location.pathname === '/';
   return (
     <aside class="hidden border-r border-zinc-200 bg-zinc-50 lg:flex lg:flex-col dark:border-zinc-800 dark:bg-zinc-950">
       <div class="flex h-14 items-center border-b border-zinc-200 px-6 dark:border-zinc-800">
@@ -73,12 +83,7 @@ function DesktopSidebar() {
         </p>
       </div>
       <div class="flex-1 overflow-y-auto p-4">
-        <nav aria-label="主导航" class="mb-4 flex flex-col gap-0.5">
-          <a href="#/" class={navCls(isInboxActive())}>
-            <Inbox size={18} />
-            <span>收件箱</span>
-          </a>
-        </nav>
+        <MainNav class="mb-4 flex flex-col gap-0.5" />
         <div class="mb-4 border-t border-zinc-200 dark:border-zinc-800" />
         <nav aria-label="标签">
           <TagNav />

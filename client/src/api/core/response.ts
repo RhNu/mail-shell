@@ -47,6 +47,23 @@ export async function executeBlob<TError = unknown>(
   }
 }
 
+export async function executeVoid<TError = unknown>(
+  request: Promise<ApiResult<unknown, TError>>,
+): Promise<void> {
+  try {
+    const result = await request;
+    if (!result.response.ok || result.error !== undefined) {
+      throw new HttpResponseError(
+        result.response.status,
+        result.response.statusText,
+        result.error ?? null,
+      );
+    }
+  } catch (error) {
+    throw normalizeClientError(error);
+  }
+}
+
 function normalizeClientError(error: unknown): Error {
   if (
     error instanceof HttpResponseError ||

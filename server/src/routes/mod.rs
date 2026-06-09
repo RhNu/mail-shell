@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use axum::{
     Router,
-    routing::{get, post},
+    routing::{get, patch, post},
 };
 
 use crate::repository::Repository;
@@ -37,7 +37,14 @@ pub fn router(state: AppState) -> Router {
         .route("/api/healthz", get(health::handler))
         .route("/api/inbound", post(inbound::handler))
         .route("/api/messages", get(messages::list))
-        .route("/api/messages/{id}", get(messages::detail))
+        .route(
+            "/api/messages/{id}",
+            get(messages::detail).delete(messages::delete),
+        )
+        .route(
+            "/api/messages/{id}/mailbox",
+            patch(messages::update_mailbox),
+        )
         .route("/api/messages/{id}/raw", get(messages::raw_download))
         .route("/api/messages/{id}/headers", get(messages::headers))
         .route("/api/attachments/{id}", get(attachments::download))

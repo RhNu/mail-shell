@@ -205,6 +205,7 @@ async fn cleanup_files(paths: &[PathBuf]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::Mailbox;
     use crate::repository::{ListMessagesQuery, sqlx::SqlxRepository};
     use crate::services::notifier::NoopNotifier;
 
@@ -234,6 +235,7 @@ mod tests {
         let page = repo
             .list_messages(ListMessagesQuery {
                 tag_id: None,
+                mailbox: Mailbox::Inbox,
                 limit: 20,
                 offset: 0,
             })
