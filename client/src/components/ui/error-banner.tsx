@@ -9,7 +9,7 @@ export type ErrorBannerProps = {
 
 export function ErrorBanner(props: ErrorBannerProps): JSX.Element {
   return (
-    <div class="flex items-start gap-3 rounded-sm border border-red-200 bg-red-50 p-4 dark:border-red-900/30 dark:bg-red-950/20">
+    <div class="animate-slide-down flex items-start gap-3 rounded-sm border border-red-200 bg-red-50 p-4 dark:border-red-900/30 dark:bg-red-950/20">
       <AlertTriangle
         size={18}
         class="mt-0.5 shrink-0 text-red-600 dark:text-red-400"

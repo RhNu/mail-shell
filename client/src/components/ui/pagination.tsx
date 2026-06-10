@@ -10,7 +10,7 @@ export type PaginationProps = {
 };
 
 const btnCls =
-  'inline-flex h-8 w-8 items-center justify-center rounded-sm border border-zinc-200 text-zinc-600 transition-colors hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800';
+  'inline-flex h-8 w-8 items-center justify-center rounded-sm border border-zinc-200 text-zinc-600 transition-[colors,transform] duration-150 hover:bg-zinc-100 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800';
 
 function pageNumbers(page: number, totalPages: number): (number | string)[] {
   const pages: (number | string)[] = [];
@@ -56,7 +56,7 @@ export function Pagination(props: PaginationProps): JSX.Element {
               type="button"
               onClick={() => props.onPageChange(p)}
               class={[
-                'inline-flex h-8 min-w-[2rem] items-center justify-center rounded-sm border px-2 text-sm transition-colors',
+                'inline-flex h-8 min-w-[2rem] items-center justify-center rounded-sm border px-2 text-sm transition-[colors,transform] duration-150 active:scale-95',
                 p === props.page
                   ? 'border-zinc-900 bg-zinc-900 text-zinc-50 dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900'
                   : 'border-zinc-200 text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800',

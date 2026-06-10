@@ -9,8 +9,8 @@ export type EmptyStateProps = {
 
 export function EmptyState(props: EmptyStateProps): JSX.Element {
   return (
-    <div class="flex flex-col items-center justify-center py-16 text-center">
-      <div class="mb-4 text-zinc-300 dark:text-zinc-600">
+    <div class="animate-fade-in flex flex-col items-center justify-center py-16 text-center">
+      <div class="animate-float mb-4 text-zinc-300 dark:text-zinc-600">
         {props.icon ?? <Inbox size={40} strokeWidth={1.5} />}
       </div>
       <h3 class="mb-1 text-base font-medium text-zinc-900 dark:text-zinc-100">

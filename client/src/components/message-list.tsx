@@ -30,8 +30,15 @@ export function MessageList(props: MessageListProps): JSX.Element {
     });
   });
 
+  const hasMessages = () => filteredMessages().length > 0;
+
   return (
-    <div class="border-t border-zinc-200 dark:border-zinc-800">
+    <div
+      class={[
+        'border-t border-zinc-200 dark:border-zinc-800',
+        hasMessages() ? 'animate-fade-in' : '',
+      ].join(' ')}
+    >
       <For each={filteredMessages()}>
         {(message) => (
           <MessageListItem

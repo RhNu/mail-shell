@@ -27,7 +27,7 @@ function Banner(props: { children: JSX.Element }): JSX.Element {
   return (
     <div
       role="alert"
-      class="mx-auto mt-4 flex w-full max-w-5xl items-start gap-3 rounded-sm border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200"
+      class="animate-slide-down mx-auto mt-4 flex w-full max-w-5xl items-start gap-3 rounded-sm border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200"
     >
       <AlertTriangle size={18} class="mt-0.5 shrink-0" aria-hidden="true" />
       <p class="text-sm font-medium">{props.children}</p>
