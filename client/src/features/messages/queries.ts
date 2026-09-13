@@ -6,6 +6,7 @@ import {
   getMessageDetail,
   getMessageHeaders,
   listMessages,
+  markAllMessagesRead,
   updateMessageMailbox,
   updateMessageState,
   updateMessagesState,
@@ -92,6 +93,14 @@ export function useUpdateMessagesState() {
   const queryClient = useQueryClient();
   return createMutation(() => ({
     mutationFn: ({ ids, state }: UpdateMessagesStateVariables) => updateMessagesState(ids, state),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: messagesKeys.all }),
+  }));
+}
+
+export function useMarkAllMessagesRead() {
+  const queryClient = useQueryClient();
+  return createMutation(() => ({
+    mutationFn: (query: MessageListQuery) => markAllMessagesRead(query),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: messagesKeys.all }),
   }));
 }

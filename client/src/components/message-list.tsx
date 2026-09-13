@@ -18,6 +18,7 @@ export type MessageListProps = {
     _state: { read?: boolean; starred?: boolean; trashed?: boolean },
   ) => void;
   trashView?: boolean;
+  selectionMode?: boolean;
   selectedIds?: Set<string>;
   // eslint-disable-next-line no-unused-vars
   onSelectedChange?: (_id: string, _selected: boolean) => void;
@@ -46,6 +47,7 @@ export function MessageList(props: MessageListProps): JSX.Element {
             onDelete={props.onDelete}
             onUpdateState={props.onUpdateState}
             trashView={props.trashView}
+            selectionMode={props.selectionMode}
             selected={props.selectedIds?.has(message.id)}
             onSelectedChange={props.onSelectedChange}
             actionsDisabled={props.actionsDisabled}

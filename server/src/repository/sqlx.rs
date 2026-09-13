@@ -387,6 +387,20 @@ impl Repository for SqlxRepository {
         Ok(query.build().execute(&self.pool).await?.rows_affected())
     }
 
+    async fn mark_all_messages_read(
+        &self,
+        query: &ListMessagesQuery,
+    ) -> Result<u64, RepositoryError> {
+        let search = query.search.as_deref().and_then(fts_query);
+        let mut builder = QueryBuilder::<Sqlite>::new(
+            "UPDATE messages SET read_at = COALESCE(read_at, CURRENT_TIMESTAMP) WHERE id IN (SELECT DISTINCT m.id FROM messages m",
+        );
+        append_list_joins(&mut builder, query.label_id, search.as_deref());
+        append_list_filters(&mut builder, query, search.as_deref());
+        builder.push(")");
+        Ok(builder.build().execute(&self.pool).await?.rows_affected())
+    }
+
     #[tracing::instrument(skip(self))]
     async fn delete_message(
         &self,
@@ -1208,6 +1222,57 @@ mod tests {
         assert_eq!(archive_page.total, 1);
         assert_eq!(archive_page.items[0].id, "msg-archive");
         assert_eq!(archive_page.items[0].mailbox, Mailbox::Archive);
+    }
+
+    #[tokio::test]
+    async fn mark_all_read_only_updates_messages_matching_the_view() {
+        let repo = SqlxRepository::init_pool_in_memory().await.unwrap();
+        repo.ingest_message(inbound_record("msg-inbox", "att-inbox", "<msg-inbox>"))
+            .await
+            .unwrap();
+        repo.ingest_message(inbound_record(
+            "msg-archive",
+            "att-archive",
+            "<msg-archive>",
+        ))
+        .await
+        .unwrap();
+        repo.update_message_mailbox("msg-archive", Mailbox::Archive)
+            .await
+            .unwrap();
+
+        let updated = repo
+            .mark_all_messages_read(&ListMessagesQuery {
+                label_id: None,
+                mailbox: Mailbox::Inbox,
+                search: None,
+                read: Some(false),
+                starred: None,
+                trashed: false,
+                limit: 0,
+                offset: 0,
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(updated, 1);
+        assert!(
+            repo.get_message("msg-inbox")
+                .await
+                .unwrap()
+                .unwrap()
+                .message
+                .is_read
+        );
+        assert!(
+            !repo
+                .get_message("msg-archive")
+                .await
+                .unwrap()
+                .unwrap()
+                .message
+                .is_read
+        );
     }
 
     #[tokio::test]

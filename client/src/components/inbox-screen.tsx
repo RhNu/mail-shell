@@ -1,19 +1,11 @@
-import { createEffect, createMemo, createSignal, Show, type Accessor, type JSX } from 'solid-js';
-import {
-  useDeleteMessage,
-  useMessagesList,
-  useUpdateMessageState,
-  useUpdateMessagesState,
-  useUpdateMessageMailbox,
-} from '../features/messages/queries';
+import { Show, type Accessor, type JSX } from 'solid-js';
 import type { Mailbox, MessageListQuery, MessageSummary } from '../features/messages/models';
+import { useInboxState } from '../features/messages/use-inbox-state';
 import { SearchInput, Pagination, EmptyState, ErrorBanner } from './ui';
 import { MessageList } from './message-list';
 import { MessageListSkeleton } from './message-list-skeleton';
 import { BulkToolbar } from './bulk-toolbar';
 import { useInboxKeyboardShortcuts } from '../features/messages/inbox-keyboard';
-
-const DEFAULT_LIMIT = 20;
 
 type InboxScreenProps = {
   title: JSX.Element;
@@ -46,6 +38,7 @@ type ListSectionProps = {
     state: { read?: boolean; starred?: boolean; trashed?: boolean },
   ) => void;
   trashView: boolean;
+  selectionMode: boolean;
   selectedIds: Set<string>;
   // eslint-disable-next-line no-unused-vars
   onSelectedChange: (id: string, selected: boolean) => void;
@@ -68,6 +61,7 @@ function MessageResults(props: ListSectionProps) {
           onDelete={props.onDelete}
           onUpdateState={props.onUpdateState}
           trashView={props.trashView}
+          selectionMode={props.selectionMode}
           selectedIds={props.selectedIds}
           onSelectedChange={props.onSelectedChange}
           actionsDisabled={props.actionsDisabled}
@@ -100,8 +94,12 @@ function InboxToolbar(props: {
   tagChip?: JSX.Element;
   total?: number;
   searchQuery: string;
+  selectionMode: boolean;
+  hasMessages: boolean;
+  actionsDisabled: boolean;
   // eslint-disable-next-line no-unused-vars
   onSearchChange: (value: string) => void;
+  onToggleSelectionMode: () => void;
 }) {
   return (
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -114,15 +112,26 @@ function InboxToolbar(props: {
         )}
         {props.tagChip && <div class="mt-2">{props.tagChip}</div>}
       </div>
-      <div class="w-full sm:w-64">
-        <SearchInput
-          value={props.searchQuery}
-          onChange={props.onSearchChange}
-          placeholder="搜索邮件..."
-        />
-        <p class="mt-1 hidden text-right text-[11px] text-zinc-400 lg:block dark:text-zinc-500">
-          J/K 浏览 · Enter 打开 · X 选择 · S 星标 · E 归档
-        </p>
+      <div class="flex w-full items-start gap-2 sm:w-auto">
+        <div class="min-w-0 flex-1 sm:w-64">
+          <SearchInput
+            value={props.searchQuery}
+            onChange={props.onSearchChange}
+            placeholder="搜索邮件..."
+          />
+          <p class="mt-1 hidden text-right text-[11px] text-zinc-400 lg:block dark:text-zinc-500">
+            J/K 浏览 · Enter 打开 · X 选择 · S 星标 · E 归档
+          </p>
+        </div>
+        <button
+          type="button"
+          aria-pressed={props.selectionMode}
+          disabled={!props.hasMessages || props.actionsDisabled}
+          onClick={() => props.onToggleSelectionMode()}
+          class="rounded-sm border border-zinc-300 px-3 py-2 text-sm hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+        >
+          {props.selectionMode ? '完成' : '选择'}
+        </button>
       </div>
     </div>
   );
@@ -132,13 +141,31 @@ function MutationErrorBanner(props: { message?: string }) {
   return <>{props.message && <ErrorBanner message={props.message} />}</>;
 }
 
-function scrollToTop() {
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+type InboxState = ReturnType<typeof useInboxState>;
+
+function InboxBulkActions(props: { state: InboxState; trashView: boolean }) {
+  return (
+    <BulkToolbar
+      active={props.state.selectionMode()}
+      count={props.state.selectedIds().size}
+      allSelected={props.state.allVisibleSelected()}
+      hasMessages={(props.state.messagesQuery.data?.items.length ?? 0) > 0}
+      disabled={props.state.actionsDisabled()}
+      trashView={props.trashView}
+      onToggleAll={props.state.toggleSelectAll}
+      onMarkAllRead={props.state.markAllRead}
+      onRead={() => props.state.bulkUpdate({ read: true })}
+      onArchive={() => props.state.bulkUpdate({ mailbox: 'archive' })}
+      onTrash={() => props.state.bulkUpdate({ trashed: true })}
+      onRestore={() => props.state.bulkUpdate({ trashed: false })}
+    />
+  );
 }
 
 export function InboxScreen(props: InboxScreenProps): JSX.Element {
   const state = useInboxState(() => props.query());
   useInboxKeyboard(state, () => props.query());
+  const hasMessages = () => (state.messagesQuery.data?.items.length ?? 0) > 0;
 
   return (
     <section class="flex flex-col gap-4">
@@ -148,7 +175,11 @@ export function InboxScreen(props: InboxScreenProps): JSX.Element {
         tagChip={props.tagChip}
         total={state.messagesQuery.data?.total}
         searchQuery={state.searchQuery()}
+        selectionMode={state.selectionMode()}
+        hasMessages={hasMessages()}
+        actionsDisabled={state.actionsDisabled()}
         onSearchChange={state.setSearchQuery}
+        onToggleSelectionMode={state.toggleSelectionMode}
       />
       {state.messagesQuery.isError && (
         <ErrorBanner
@@ -157,14 +188,7 @@ export function InboxScreen(props: InboxScreenProps): JSX.Element {
         />
       )}
       <MutationErrorBanner message={state.mutationErrorMessage()} />
-      <BulkToolbar
-        count={state.selectedIds().size}
-        trashView={Boolean(props.query()?.trashed)}
-        onRead={() => state.bulkUpdate({ read: true })}
-        onArchive={() => state.bulkUpdate({ mailbox: 'archive' })}
-        onTrash={() => state.bulkUpdate({ trashed: true })}
-        onRestore={() => state.bulkUpdate({ trashed: false })}
-      />
+      <InboxBulkActions state={state} trashView={Boolean(props.query()?.trashed)} />
       <ListSection
         loading={state.messagesQuery.isLoading}
         data={state.messagesQuery.data}
@@ -176,6 +200,7 @@ export function InboxScreen(props: InboxScreenProps): JSX.Element {
         onDelete={props.query()?.trashed ? state.deleteMessage : undefined}
         onUpdateState={state.updateState}
         trashView={Boolean(props.query()?.trashed)}
+        selectionMode={state.selectionMode()}
         selectedIds={state.selectedIds()}
         onSelectedChange={state.setSelected}
         actionsDisabled={state.actionsDisabled()}
@@ -192,92 +217,11 @@ function useInboxKeyboard(
   useInboxKeyboardShortcuts({
     actionsDisabled: state.actionsDisabled,
     trashView: () => Boolean(query()?.trashed),
+    onEnterSelectionMode: () => state.setSelectionMode(true),
     onSelectedChange: state.setSelected,
     onUpdateState: state.updateState,
     onMoveToMailbox: state.moveToMailbox,
   });
-}
-
-function useInboxMutations(
-  selectedIds: Accessor<Set<string>>,
-  // eslint-disable-next-line no-unused-vars
-  setSelectedIds: (value: Set<string>) => void,
-) {
-  const updateMailboxMutation = useUpdateMessageMailbox();
-  const updateStateMutation = useUpdateMessageState();
-  const updateStatesMutation = useUpdateMessagesState();
-  const deleteMessageMutation = useDeleteMessage();
-  const mutationErrorMessage = () =>
-    updateMailboxMutation.isError ||
-    updateStateMutation.isError ||
-    updateStatesMutation.isError ||
-    deleteMessageMutation.isError
-      ? (updateMailboxMutation.error?.message ??
-        updateStateMutation.error?.message ??
-        updateStatesMutation.error?.message ??
-        deleteMessageMutation.error?.message ??
-        '更新邮件失败')
-      : undefined;
-
-  return {
-    mutationErrorMessage,
-    actionsDisabled: () =>
-      updateMailboxMutation.isPending ||
-      updateStateMutation.isPending ||
-      updateStatesMutation.isPending ||
-      deleteMessageMutation.isPending,
-    setSelected: (id: string, selected: boolean) => {
-      const next = new Set(selectedIds());
-      if (selected) next.add(id);
-      else next.delete(id);
-      setSelectedIds(next);
-    },
-    bulkUpdate: (state: { mailbox?: Mailbox; read?: boolean; trashed?: boolean }) => {
-      const ids = [...selectedIds()];
-      if (ids.length === 0) return;
-      updateStatesMutation.mutate(
-        { ids, state },
-        { onSuccess: () => setSelectedIds(new Set<string>()) },
-      );
-    },
-    moveToMailbox: (id: string, mailbox: Mailbox) => updateMailboxMutation.mutate({ id, mailbox }),
-    updateState: (id: string, state: { read?: boolean; starred?: boolean; trashed?: boolean }) =>
-      updateStateMutation.mutate({ id, state }),
-    deleteMessage: (id: string) => deleteMessageMutation.mutate({ id }),
-  };
-}
-
-function useInboxState(query: Accessor<MessageListQuery>) {
-  const [page, setPage] = createSignal(1);
-  const [searchQuery, setSearchQuery] = createSignal('');
-  const [selectedIds, setSelectedIds] = createSignal(new Set<string>());
-  const queryKey = createMemo(() => JSON.stringify(query() ?? {}));
-  const messagesQuery = useMessagesList(() => ({
-    ...query(),
-    q: searchQuery().trim() || query()?.q,
-    page: page(),
-    limit: DEFAULT_LIMIT,
-  }));
-  const mutations = useInboxMutations(selectedIds, setSelectedIds);
-  createEffect(() => {
-    queryKey();
-    setPage(1);
-    setSelectedIds(new Set<string>());
-  });
-  return {
-    page,
-    selectedIds,
-    searchQuery,
-    setSearchQuery,
-    messagesQuery,
-    totalPages: () =>
-      messagesQuery.data ? Math.ceil(messagesQuery.data.total / messagesQuery.data.limit) : 0,
-    setPageAndScroll: (newPage: number) => {
-      setPage(newPage);
-      scrollToTop();
-    },
-    ...mutations,
-  };
 }
 
 function currentHashPath(): string {

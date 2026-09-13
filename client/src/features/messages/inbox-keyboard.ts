@@ -37,6 +37,7 @@ export function nextMessageIndex(current: number, length: number, direction: 1 |
 type InboxKeyboardOptions = {
   actionsDisabled: Accessor<boolean>;
   trashView: Accessor<boolean>;
+  onEnterSelectionMode: () => void;
   // eslint-disable-next-line no-unused-vars
   onSelectedChange: (id: string, selected: boolean) => void;
   // eslint-disable-next-line no-unused-vars
@@ -72,8 +73,8 @@ function runRowShortcut(command: InboxShortcut, row: HTMLElement, options: Inbox
   if (!id || options.actionsDisabled()) return;
   if (command === 'open') row.querySelector<HTMLAnchorElement>('[data-message-link]')?.click();
   if (command === 'select') {
-    const checkbox = row.querySelector<HTMLInputElement>('input[type="checkbox"]');
-    if (checkbox) options.onSelectedChange(id, !checkbox.checked);
+    options.onEnterSelectionMode();
+    options.onSelectedChange(id, row.dataset.messageSelected !== 'true');
   }
   if (command === 'star')
     options.onUpdateState(id, { starred: row.dataset.messageStarred !== 'true' });

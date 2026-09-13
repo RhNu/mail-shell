@@ -44,6 +44,7 @@ pub fn router(state: AppState) -> Router {
             "/api/messages/bulk-state",
             patch(messages::update_bulk_state),
         )
+        .route("/api/messages/read-all", patch(messages::mark_all_read))
         .route(
             "/api/messages/{id}",
             get(messages::detail).delete(messages::delete),

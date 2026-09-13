@@ -80,6 +80,7 @@ async fn test_openapi_document_exposes_core_routes() {
     assert!(paths.contains_key("/api/healthz"));
     assert!(paths.contains_key("/api/inbound"));
     assert!(paths.contains_key("/api/messages"));
+    assert!(paths.contains_key("/api/messages/read-all"));
     assert!(paths.contains_key("/api/messages/{id}"));
     assert!(
         paths["/api/messages/{id}"]
@@ -164,6 +165,24 @@ async fn test_full_inbound_and_read_roundtrip() {
         .find(|facet| facet["value"] == "recipient@example.com")
         .unwrap();
     assert_eq!(recipient["message_count"], 1);
+
+    // 5. Mark every unread message in the current inbox view as read.
+    let req = Request::builder()
+        .method("PATCH")
+        .uri("/api/messages/read-all?mailbox=inbox&read=false")
+        .body(Body::empty())
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::NO_CONTENT);
+
+    let req = Request::builder()
+        .uri(format!("/api/messages/{msg_id}"))
+        .body(Body::empty())
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    let body_bytes = res.into_body().collect().await.unwrap().to_bytes();
+    let detail: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    assert_eq!(detail["is_read"], true);
 }
 
 #[tokio::test]

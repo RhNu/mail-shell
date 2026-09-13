@@ -25,6 +25,7 @@ export type MessageListItemProps = {
     _state: { read?: boolean; starred?: boolean; trashed?: boolean },
   ) => void;
   trashView?: boolean;
+  selectionMode?: boolean;
   selected?: boolean;
   // eslint-disable-next-line no-unused-vars
   onSelectedChange?: (_id: string, _selected: boolean) => void;
@@ -145,6 +146,7 @@ export function MessageListItem(props: MessageListItemProps): JSX.Element {
       data-message-row
       data-message-id={props.message.id}
       data-message-starred={String(props.message.is_starred)}
+      data-message-selected={String(Boolean(props.selected))}
       tabindex="0"
       class={[
         'group relative flex items-center gap-4 border-b border-zinc-100 px-4 py-3 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-zinc-500 dark:border-zinc-800/60',
@@ -156,7 +158,7 @@ export function MessageListItem(props: MessageListItemProps): JSX.Element {
       {props.active && (
         <span class="absolute top-0 bottom-0 left-0 w-0.5 bg-zinc-900 dark:bg-zinc-100" />
       )}
-      {props.onSelectedChange && (
+      {props.selectionMode && props.onSelectedChange && (
         <input
           type="checkbox"
           checked={props.selected}

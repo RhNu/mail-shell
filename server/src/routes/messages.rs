@@ -125,6 +125,40 @@ pub async fn update_bulk_state(
 }
 
 #[utoipa::path(
+    patch,
+    path = "/api/messages/read-all",
+    operation_id = "markAllMessagesRead",
+    params(
+        ("label" = Option<i64>, Query, description = "Filter by user label id"),
+        ("mailbox" = Option<Mailbox>, Query, description = "Filter by mailbox; defaults to inbox"),
+        ("q" = Option<String>, Query, description = "Full-text search"),
+        ("read" = Option<bool>, Query, description = "Filter by current read state"),
+        ("starred" = Option<bool>, Query, description = "Filter by starred state"),
+        ("trashed" = Option<bool>, Query, description = "Show trashed messages")
+    ),
+    responses((status = 204, description = "All matching messages marked as read"))
+)]
+pub async fn mark_all_read(
+    State(state): State<AppState>,
+    Query(query): Query<ListQuery>,
+) -> Result<axum::http::StatusCode, AppError> {
+    state
+        .repo
+        .mark_all_messages_read(&ListMessagesQuery {
+            label_id: query.label,
+            mailbox: query.mailbox.unwrap_or_default(),
+            search: query.q.filter(|value| !value.trim().is_empty()),
+            read: query.read,
+            starred: query.starred,
+            trashed: query.trashed.unwrap_or(false),
+            limit: 0,
+            offset: 0,
+        })
+        .await?;
+    Ok(axum::http::StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(
     delete,
     path = "/api/trash",
     operation_id = "emptyTrash",

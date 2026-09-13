@@ -172,6 +172,7 @@ Full CI details: [`docs/deployment-and-ci.md`](docs/deployment-and-ci.md).
 | PATCH | `/api/messages/{id}/mailbox` | Move a message between `inbox` and `archive` |
 | PATCH | `/api/messages/{id}/state` | Update read, starred, trash, or mailbox state |
 | PATCH | `/api/messages/bulk-state` | Update state for several messages |
+| PATCH | `/api/messages/read-all` | Mark every message matching the current view as read |
 | DELETE | `/api/messages/{id}` | Permanently delete a message and its stored blobs |
 | DELETE | `/api/trash` | Permanently empty the trash |
 | GET | `/api/messages/{id}/headers` | Parsed top-level message headers from the stored snapshot |

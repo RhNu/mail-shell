@@ -138,6 +138,22 @@ export interface paths {
     patch: operations['updateMessagesState'];
     trace?: never;
   };
+  '/api/messages/read-all': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch: operations['markAllMessagesRead'];
+    trace?: never;
+  };
   '/api/messages/{id}': {
     parameters: {
       query?: never;
@@ -781,6 +797,37 @@ export interface operations {
     };
     responses: {
       /** @description Message states updated */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  markAllMessagesRead: {
+    parameters: {
+      query?: {
+        /** @description Filter by user label id */
+        label?: number;
+        /** @description Filter by mailbox; defaults to inbox */
+        mailbox?: components['schemas']['Mailbox'];
+        /** @description Full-text search */
+        q?: string;
+        /** @description Filter by current read state */
+        read?: boolean;
+        /** @description Filter by starred state */
+        starred?: boolean;
+        /** @description Show trashed messages */
+        trashed?: boolean;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description All matching messages marked as read */
       204: {
         headers: {
           [name: string]: unknown;

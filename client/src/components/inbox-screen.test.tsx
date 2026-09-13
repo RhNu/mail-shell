@@ -9,6 +9,7 @@ const messagesListHookState = vi.hoisted(() => ({
   deleteMessage: vi.fn(),
   updateState: vi.fn(),
   updateStates: vi.fn(),
+  markAllRead: vi.fn(),
   updateMailboxPending: false,
   deleteMessagePending: false,
 }));
@@ -70,6 +71,12 @@ vi.mock('../features/messages/queries', () => ({
     isError: false,
     error: undefined,
   }),
+  useMarkAllMessagesRead: () => ({
+    mutate: messagesListHookState.markAllRead,
+    isPending: false,
+    isError: false,
+    error: undefined,
+  }),
 }));
 
 function buildMessage(id: string, subject: string) {
@@ -114,6 +121,7 @@ beforeEach(() => {
   messagesListHookState.deleteMessage.mockReset();
   messagesListHookState.updateState.mockReset();
   messagesListHookState.updateStates.mockReset();
+  messagesListHookState.markAllRead.mockReset();
   messagesListHookState.updateMailboxPending = false;
   messagesListHookState.deleteMessagePending = false;
 });
@@ -141,6 +149,47 @@ it('archives an inbox message from the list action menu', async () => {
     id: 'msg-page-1',
     mailbox: 'archive',
   });
+});
+
+it('only shows selection controls after entering selection mode', async () => {
+  render(() => <InboxScreen title={<h1>Inbox</h1>} query={() => ({ mailbox: 'inbox' })} />);
+
+  expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '全选' })).not.toBeInTheDocument();
+
+  await fireEvent.click(screen.getByRole('button', { name: '选择' }));
+
+  expect(screen.getByRole('checkbox')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '全选' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '全部已读' })).toBeInTheDocument();
+});
+
+it('selects every visible message and can clear the selection', async () => {
+  render(() => <InboxScreen title={<h1>Inbox</h1>} query={() => ({ mailbox: 'inbox' })} />);
+  await fireEvent.click(screen.getByRole('button', { name: '选择' }));
+
+  await fireEvent.click(screen.getByRole('button', { name: '全选' }));
+  expect(screen.getByRole('checkbox')).toBeChecked();
+  expect(screen.getByText('已选择 1 封')).toBeInTheDocument();
+
+  await fireEvent.click(screen.getByRole('button', { name: '取消全选' }));
+  expect(screen.getByRole('checkbox')).not.toBeChecked();
+});
+
+it('marks every message in the current filtered view as read', async () => {
+  render(() => (
+    <InboxScreen
+      title={<h1>Unread</h1>}
+      query={() => ({ mailbox: 'inbox', read: false, label: 3 })}
+    />
+  ));
+  await fireEvent.click(screen.getByRole('button', { name: '选择' }));
+  await fireEvent.click(screen.getByRole('button', { name: '全部已读' }));
+
+  expect(messagesListHookState.markAllRead).toHaveBeenCalledWith(
+    expect.objectContaining({ mailbox: 'inbox', read: false, label: 3 }),
+    expect.any(Object),
+  );
 });
 
 it('permanently deletes a trashed message from the list action menu after confirmation', async () => {

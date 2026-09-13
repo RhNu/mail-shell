@@ -111,6 +111,11 @@ pub trait Repository: Send + Sync {
         state: &MessageStateUpdateRequest,
     ) -> Result<u64, RepositoryError>;
 
+    async fn mark_all_messages_read(
+        &self,
+        query: &ListMessagesQuery,
+    ) -> Result<u64, RepositoryError>;
+
     async fn delete_message(
         &self,
         id: &str,

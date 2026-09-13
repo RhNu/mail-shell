@@ -27,6 +27,7 @@ pub(crate) struct InboundMultipartRequest {
         crate::routes::messages::update_mailbox,
         crate::routes::messages::update_state,
         crate::routes::messages::update_bulk_state,
+        crate::routes::messages::mark_all_read,
         crate::routes::messages::empty_trash,
         crate::routes::messages::delete,
         crate::routes::messages::raw_download,

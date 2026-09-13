@@ -71,6 +71,23 @@ export function updateMessagesState(
   );
 }
 
+export function markAllMessagesRead(query: MessageListQuery = {}): Promise<void> {
+  return executeVoid(
+    apiClient.PATCH('/api/messages/read-all', {
+      params: {
+        query: {
+          label: query.label,
+          mailbox: query.mailbox,
+          q: query.q,
+          read: query.read,
+          starred: query.starred,
+          trashed: query.trashed,
+        },
+      },
+    }),
+  );
+}
+
 export function emptyTrash(): Promise<void> {
   return executeVoid(apiClient.DELETE('/api/trash'));
 }
