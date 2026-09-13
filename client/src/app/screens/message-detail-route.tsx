@@ -1,6 +1,6 @@
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
 import { useParams } from '@solidjs/router';
-import { ArrowLeft, Calendar, User } from 'lucide-solid';
+import { ArrowLeft } from 'lucide-solid';
 import { useMessageDetail } from '../../features/messages/queries';
 import { ErrorBanner, EmptyState, Skeleton } from '../../components/ui';
 import { AttachmentList } from '../../components/attachment-list';
@@ -12,49 +12,8 @@ import {
   useDetailReturn,
   type Mailbox,
 } from './message-detail-actions';
-import { MessageDetailMenu, MessageLabelsEditor } from './message-detail-menu';
+import { MessageDetailMenu, MessageMeta } from './message-detail-menu';
 import { MessageHeadersDialogMount } from './message-headers-dialog-mount';
-
-function MessageMeta(props: {
-  from: string;
-  to: string;
-  createdAt: string;
-  messageId: string;
-  labelIds: number[];
-}) {
-  return (
-    <div class="flex flex-col gap-2 text-sm">
-      <div class="flex items-start gap-2">
-        <User
-          size={16}
-          class="mt-0.5 shrink-0 text-zinc-400 dark:text-zinc-500"
-          aria-hidden="true"
-        />
-        <div class="flex flex-col gap-0.5">
-          <div class="text-zinc-900 dark:text-zinc-100">
-            <span class="text-zinc-500 dark:text-zinc-400">发件人：</span> {props.from}
-          </div>
-          <div class="text-zinc-900 dark:text-zinc-100">
-            <span class="text-zinc-500 dark:text-zinc-400">收件人：</span> {props.to}
-          </div>
-        </div>
-      </div>
-      <div class="flex items-center gap-2">
-        <Calendar size={16} class="shrink-0 text-zinc-400 dark:text-zinc-500" aria-hidden="true" />
-        <time class="text-zinc-700 dark:text-zinc-300" datetime={props.createdAt}>
-          {new Date(props.createdAt).toLocaleString(undefined, {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-          })}
-        </time>
-      </div>
-      <MessageLabelsEditor messageId={props.messageId} labelIds={props.labelIds} />
-    </div>
-  );
-}
 
 function DetailSkeleton() {
   return (
@@ -147,13 +106,7 @@ function MessageLoadedState(props: {
             disabled={props.actionsDisabled}
           />
         </div>
-        <MessageMeta
-          from={props.query.data!.from_address}
-          to={props.query.data!.to_address ?? props.query.data!.envelope_to}
-          createdAt={props.query.data!.created_at}
-          messageId={props.query.data!.id}
-          labelIds={props.query.data!.labels.map((label) => label.id)}
-        />
+        <MessageMeta message={props.query.data!} />
       </div>
       <Show when={props.remoteResourcesBlocked}>
         <RemoteResourcesNotice onLoadRemoteResources={props.onLoadRemoteResources} />

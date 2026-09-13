@@ -11,6 +11,7 @@ import { SearchInput, Pagination, EmptyState, ErrorBanner } from './ui';
 import { MessageList } from './message-list';
 import { MessageListSkeleton } from './message-list-skeleton';
 import { BulkToolbar } from './bulk-toolbar';
+import { useInboxKeyboardShortcuts } from '../features/messages/inbox-keyboard';
 
 const DEFAULT_LIMIT = 20;
 
@@ -119,6 +120,9 @@ function InboxToolbar(props: {
           onChange={props.onSearchChange}
           placeholder="搜索邮件..."
         />
+        <p class="mt-1 hidden text-right text-[11px] text-zinc-400 lg:block dark:text-zinc-500">
+          J/K 浏览 · Enter 打开 · X 选择 · S 星标 · E 归档
+        </p>
       </div>
     </div>
   );
@@ -134,6 +138,7 @@ function scrollToTop() {
 
 export function InboxScreen(props: InboxScreenProps): JSX.Element {
   const state = useInboxState(() => props.query());
+  useInboxKeyboard(state, () => props.query());
 
   return (
     <section class="flex flex-col gap-4">
@@ -178,6 +183,19 @@ export function InboxScreen(props: InboxScreenProps): JSX.Element {
       />
     </section>
   );
+}
+
+function useInboxKeyboard(
+  state: ReturnType<typeof useInboxState>,
+  query: Accessor<MessageListQuery>,
+) {
+  useInboxKeyboardShortcuts({
+    actionsDisabled: state.actionsDisabled,
+    trashView: () => Boolean(query()?.trashed),
+    onSelectedChange: state.setSelected,
+    onUpdateState: state.updateState,
+    onMoveToMailbox: state.moveToMailbox,
+  });
 }
 
 function useInboxMutations(

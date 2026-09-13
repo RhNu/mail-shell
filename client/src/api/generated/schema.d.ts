@@ -536,7 +536,10 @@ export type $defs = Record<string, never>;
 export interface operations {
   downloadAttachment: {
     parameters: {
-      query?: never;
+      query?: {
+        /** @description Request inline browser display */
+        inline?: boolean;
+      };
       header?: never;
       path: {
         /** @description Attachment id */

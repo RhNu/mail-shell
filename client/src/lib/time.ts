@@ -17,3 +17,8 @@ export function formatRelativeTime(dateStr: string): string {
     day: 'numeric',
   });
 }
+
+export function messageDisplayDate(messageDate: string | null | undefined, receivedAt: string) {
+  if (!messageDate) return receivedAt;
+  return Number.isNaN(new Date(messageDate).getTime()) ? receivedAt : messageDate;
+}

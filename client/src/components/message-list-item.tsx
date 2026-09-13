@@ -5,7 +5,7 @@ import type { Mailbox, MessageSummary } from '../features/messages/models';
 import type { MessageLabel } from '../features/classification/api';
 import { TagChip } from './ui/tag-chip';
 import { messageDetailHref } from '../app/routes';
-import { formatRelativeTime } from '../lib/time';
+import { formatRelativeTime, messageDisplayDate } from '../lib/time';
 import { MessageActionMenu } from './message-action-menu';
 
 export type MessageListItemProps = {
@@ -37,13 +37,23 @@ function MessageListItemLink(props: {
   attachmentCount?: number;
   returnTo: string;
 }) {
+  const sender = () => props.message.from_name?.trim() || props.message.from_address;
+
   return (
     <a
       href={`#${messageDetailHref(props.message.id, props.returnTo)}`}
+      data-message-link
       class="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:gap-4"
     >
-      <span class="w-48 shrink-0 truncate text-sm text-zinc-700 dark:text-zinc-300">
-        {props.message.from_address}
+      <span
+        class="w-48 shrink-0 truncate text-sm text-zinc-700 dark:text-zinc-300"
+        title={
+          props.message.from_name
+            ? `${props.message.from_name} <${props.message.from_address}>`
+            : props.message.from_address
+        }
+      >
+        {sender()}
       </span>
       <span class="min-w-0 flex-1 truncate text-sm text-zinc-900 dark:text-zinc-100">
         {props.message.subject ?? '（无主题）'}
@@ -62,6 +72,8 @@ function MessageListItemMeta(props: {
   tags: MessageLabel[];
   attachmentCount?: number;
 }) {
+  const displayDate = () => messageDisplayDate(props.message.date, props.message.created_at);
+
   return (
     <div class="flex shrink-0 items-center gap-3">
       {props.tags.length > 0 && (
@@ -80,9 +92,10 @@ function MessageListItemMeta(props: {
       </span>
       <time
         class="w-16 shrink-0 text-right text-xs text-zinc-400 tabular-nums dark:text-zinc-500"
-        datetime={props.message.created_at}
+        datetime={displayDate()}
+        title={new Date(displayDate()).toLocaleString()}
       >
-        {formatRelativeTime(props.message.created_at)}
+        {formatRelativeTime(displayDate())}
       </time>
     </div>
   );
@@ -129,8 +142,12 @@ function MessageListItemActions(props: MessageListItemProps) {
 export function MessageListItem(props: MessageListItemProps): JSX.Element {
   return (
     <div
+      data-message-row
+      data-message-id={props.message.id}
+      data-message-starred={String(props.message.is_starred)}
+      tabindex="0"
       class={[
-        'group relative flex items-center gap-4 border-b border-zinc-100 px-4 py-3 transition-colors dark:border-zinc-800/60',
+        'group relative flex items-center gap-4 border-b border-zinc-100 px-4 py-3 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-zinc-500 dark:border-zinc-800/60',
         props.active
           ? 'bg-zinc-100 dark:bg-zinc-800'
           : 'hover:bg-zinc-50 dark:hover:bg-zinc-900/50',

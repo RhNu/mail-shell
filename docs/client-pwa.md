@@ -18,6 +18,7 @@ The design keeps update state and connectivity state separate, because they repr
 - Keep update handling global instead of page-specific.
 - Warn when the app cannot reach the backend, including both browser-offline and API-unreachable cases.
 - Preserve the existing page-level error handling for query-specific failures.
+- Keep the install icon legible at small sizes with a monochrome, solid envelope mark.
 
 ## Non-Goals
 

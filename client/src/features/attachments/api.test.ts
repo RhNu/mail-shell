@@ -11,5 +11,8 @@ describe('attachmentDownloadUrl', async () => {
     expect(attachmentDownloadUrl('att-42')).toBe(
       'https://api.example.test/mail/api/attachments/att-42',
     );
+    expect(attachmentDownloadUrl('att-42', true)).toBe(
+      'https://api.example.test/mail/api/attachments/att-42?inline=true',
+    );
   });
 });

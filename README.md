@@ -23,7 +23,8 @@ Email → Cloudflare → Worker → POST /api/inbound → Server (SQLite + files
 - Classification combines fixed mailbox views, durable user labels, saved searches, rules, and
   non-empty sender/recipient/domain facets.
 - On successful ingest, the server can push a notification through the configured notifier.
-- The client uses hash routing; the server serves `client/dist` as static assets.
+- The client uses hash routing; the server serves `client/dist` as static assets. Message lists
+  support keyboard triage, and safe browser-native attachment types can be previewed inline.
 
 Full architecture details: [`docs/architecture.md`](docs/architecture.md).
 
