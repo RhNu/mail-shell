@@ -18,7 +18,6 @@ use crate::routes::AppState;
 pub struct ListQuery {
     page: Option<u32>,
     limit: Option<u32>,
-    tag: Option<i64>,
     label: Option<i64>,
     mailbox: Option<Mailbox>,
     q: Option<String>,
@@ -34,7 +33,6 @@ pub struct ListQuery {
     params(
         ("page" = Option<u32>, Query, description = "1-based page number"),
         ("limit" = Option<u32>, Query, description = "Page size between 1 and 100"),
-        ("tag" = Option<i64>, Query, description = "Filter by tag id"),
         ("label" = Option<i64>, Query, description = "Filter by user label id"),
         ("mailbox" = Option<Mailbox>, Query, description = "Filter by mailbox; defaults to inbox"),
         ("q" = Option<String>, Query, description = "Full-text search"),
@@ -59,7 +57,6 @@ pub async fn list(
     let page_data = state
         .repo
         .list_messages(ListMessagesQuery {
-            tag_id: query.tag,
             label_id: query.label,
             mailbox: query.mailbox.unwrap_or_default(),
             search: query.q.filter(|value| !value.trim().is_empty()),
@@ -339,7 +336,7 @@ mod tests {
     use super::*;
     use std::sync::Arc;
 
-    use crate::repository::{InboundMessageRecord, InboundTagRecord, sqlx::SqlxRepository};
+    use crate::repository::{InboundMessageRecord, sqlx::SqlxRepository};
     use crate::services::inbound::InboundMessageService;
     use crate::services::notifier::{NoopNotifier, Notifier};
 
@@ -378,7 +375,6 @@ mod tests {
                     .unwrap()
                     .snapshot,
                 attachments: Vec::new(),
-                tags: Vec::new(),
                 label_ids: Vec::new(),
                 initial_state: Default::default(),
             })
@@ -395,7 +391,6 @@ mod tests {
         let query = ListQuery {
             page: Some(1),
             limit: Some(2),
-            tag: None,
             label: None,
             mailbox: None,
             q: None,
@@ -406,59 +401,6 @@ mod tests {
         let res = list(State(state), Query(query)).await.unwrap();
         assert_eq!(res.total, 5);
         assert_eq!(res.items.len(), 2);
-    }
-
-    #[tokio::test]
-    async fn test_list_filter_by_tag() {
-        let state = setup_state().await;
-        insert_messages(&*state.repo, 3).await;
-
-        state
-            .repo
-            .ingest_message(InboundMessageRecord {
-                id: "msg-tagged".to_string(),
-                message_id: Some("<msg-tagged>".to_string()),
-                subject: "Tagged".to_string(),
-                from_name: None,
-                from_address: "from@example.com".to_string(),
-                to_name: None,
-                to_address: Some("to@example.com".to_string()),
-                envelope_to: "to@example.com".to_string(),
-                date: Some("2024-01-01T00:00:00+00:00".to_string()),
-                raw_path: "/tmp/tagged.eml".to_string(),
-                ingest_fingerprint: None,
-                snapshot: crate::mime_parser::parse_message(
-                    b"From: from@example.com\r\nTo: to@example.com\r\nSubject: Tagged\r\nMessage-ID: <msg-tagged>\r\nContent-Type: text/plain\r\n\r\nBody",
-                )
-                .unwrap()
-                .snapshot,
-                attachments: Vec::new(),
-                tags: vec![InboundTagRecord {
-                    kind: "recipient_address".to_string(),
-                    value: "to@example.com".to_string(),
-                    label: "To: to@example.com".to_string(),
-                    source: "system".to_string(),
-                }],
-                label_ids: Vec::new(),
-                initial_state: Default::default(),
-            })
-            .await
-            .unwrap();
-
-        let query = ListQuery {
-            page: None,
-            limit: None,
-            tag: Some(1),
-            label: None,
-            mailbox: None,
-            q: None,
-            read: None,
-            starred: None,
-            trashed: None,
-        };
-        let res = list(State(state), Query(query)).await.unwrap();
-        assert_eq!(res.total, 1);
-        assert_eq!(res.items[0].id, "msg-tagged");
     }
 
     #[tokio::test]

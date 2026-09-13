@@ -298,22 +298,6 @@ export interface paths {
     patch: operations['updateSavedView'];
     trace?: never;
   };
-  '/api/tags': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get: operations['listTags'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
   '/api/trash': {
     parameters: {
       query?: never;
@@ -372,7 +356,6 @@ export interface components {
     };
     /** @description Health check response payload. */
     HealthResponse: {
-      classification_model: string;
       status: string;
     };
     InboundMetadata: {
@@ -514,16 +497,6 @@ export interface components {
       query: unknown;
       /** Format: int64 */
       sort_order: number;
-    };
-    Tag: {
-      /** Format: int64 */
-      id: number;
-      kind: string;
-      label: string;
-      /** Format: int64 */
-      message_count?: number | null;
-      source: string;
-      value: string;
     };
   };
   responses: never;
@@ -755,8 +728,6 @@ export interface operations {
         page?: number;
         /** @description Page size between 1 and 100 */
         limit?: number;
-        /** @description Filter by tag id */
-        tag?: number;
         /** @description Filter by user label id */
         label?: number;
         /** @description Filter by mailbox; defaults to inbox */
@@ -1245,35 +1216,6 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
-      };
-    };
-  };
-  listTags: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Tag list with message counts */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Tag'][];
-        };
-      };
-      /** @description Repository failure */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['ErrorResponse'];
-        };
       };
     };
   };

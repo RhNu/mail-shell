@@ -18,7 +18,6 @@ pub mod labels;
 pub mod messages;
 pub mod rules;
 pub mod saved_views;
-pub mod tags;
 
 /// Shared application state passed to all Axum handlers.
 #[derive(Clone)]
@@ -57,7 +56,6 @@ pub fn router(state: AppState) -> Router {
         .route("/api/messages/{id}/raw", get(messages::raw_download))
         .route("/api/messages/{id}/headers", get(messages::headers))
         .route("/api/attachments/{id}", get(attachments::download))
-        .route("/api/tags", get(tags::list))
         .route("/api/facets", get(facets::list))
         .route("/api/labels", get(labels::list).post(labels::create))
         .route(

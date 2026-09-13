@@ -9,7 +9,7 @@ use std::path::Path;
 use crate::mime_parser::{ParsedMailSnapshotV1, SNAPSHOT_VERSION};
 use crate::models::{
     AttachmentDownloadMeta, AttachmentMeta, HeaderEntry, Mailbox, MessageDetail, MessageRawMeta,
-    MessageSummary, Tag,
+    MessageSummary,
 };
 use crate::repository::{
     DeletedMessageFiles, InboundMessageRecord, ListMessagesQuery, MessagePage, MessageRecord,
@@ -60,19 +60,12 @@ impl SqlxRepository {
     #[tracing::instrument]
     pub async fn init_pool(data_dir: &Path) -> Result<Self, sqlx::Error> {
         let db_path = data_dir.join(DB_FILENAME);
-        let backup_path = data_dir.join("index.pre-v3.sqlite");
-        if db_path.exists() && !backup_path.exists() {
-            std::fs::copy(&db_path, &backup_path).map_err(sqlx::Error::Io)?;
-            tracing::info!(path = %backup_path.display(), "created pre-v3 database backup");
-        }
         let options = SqliteConnectOptions::new()
             .filename(&db_path)
             .create_if_missing(true);
         let pool = SqlitePoolOptions::new().connect_with(options).await?;
         Self::migrate(&pool).await?;
-        let repo = Self::new(pool);
-        repo.rebuild_derived_indexes().await?;
-        Ok(repo)
+        Ok(Self::new(pool))
     }
 
     #[tracing::instrument]
@@ -85,63 +78,12 @@ impl SqlxRepository {
             .connect_with(options)
             .await?;
         Self::migrate(&pool).await?;
-        let repo = Self::new(pool);
-        repo.rebuild_derived_indexes().await?;
-        Ok(repo)
+        Ok(Self::new(pool))
     }
 
     #[tracing::instrument(skip(pool))]
     async fn migrate(pool: &SqlitePool) -> Result<(), sqlx::Error> {
         MIGRATOR.run(pool).await?;
-        Ok(())
-    }
-
-    async fn rebuild_derived_indexes(&self) -> Result<(), sqlx::Error> {
-        let version: Option<String> = sqlx::query_scalar(
-            "SELECT value FROM app_metadata WHERE key = 'derived_index_version'",
-        )
-        .fetch_optional(&self.pool)
-        .await?;
-        if version.as_deref() == Some("1") {
-            return Ok(());
-        }
-
-        let rows = sqlx::query_as::<_, StoredSnapshot>(
-            "SELECT id, snapshot_version, parsed_snapshot FROM messages ORDER BY created_at, id",
-        )
-        .fetch_all(&self.pool)
-        .await?;
-        let envelopes: Vec<(String, String)> =
-            sqlx::query_as("SELECT id, envelope_to FROM messages ORDER BY created_at, id")
-                .fetch_all(&self.pool)
-                .await?;
-        let envelope_by_id = envelopes
-            .into_iter()
-            .collect::<std::collections::HashMap<_, _>>();
-        let mut tx = self.pool.begin().await?;
-        sqlx::query("DELETE FROM message_addresses")
-            .execute(&mut *tx)
-            .await?;
-        sqlx::query("DELETE FROM message_fts")
-            .execute(&mut *tx)
-            .await?;
-        for row in rows {
-            let snapshot =
-                Self::decode_snapshot(&row.id, row.snapshot_version, &row.parsed_snapshot)
-                    .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
-            let envelope = envelope_by_id
-                .get(&row.id)
-                .map(String::as_str)
-                .unwrap_or_default();
-            insert_snapshot_values(&mut tx, &row.id, envelope, &snapshot).await?;
-        }
-        sqlx::query(
-            "INSERT INTO app_metadata(key, value) VALUES ('derived_index_version', '1')
-             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-        )
-        .execute(&mut *tx)
-        .await?;
-        tx.commit().await?;
         Ok(())
     }
 
@@ -252,29 +194,6 @@ impl Repository for SqlxRepository {
             .await?;
         }
 
-        for tag in &record.tags {
-            let tag_id: i64 = sqlx::query_scalar(
-                "INSERT INTO tags (kind, value, label, source)
-                 VALUES (?1, ?2, ?3, ?4)
-                 ON CONFLICT(kind, value) DO UPDATE SET
-                     label = excluded.label,
-                     source = excluded.source
-                 RETURNING id",
-            )
-            .bind(&tag.kind)
-            .bind(&tag.value)
-            .bind(&tag.label)
-            .bind(&tag.source)
-            .fetch_one(&mut *tx)
-            .await?;
-
-            sqlx::query("INSERT OR IGNORE INTO message_tags (message_id, tag_id) VALUES (?1, ?2)")
-                .bind(&record.id)
-                .bind(tag_id)
-                .execute(&mut *tx)
-                .await?;
-        }
-
         for label_id in &record.label_ids {
             sqlx::query(
                 "INSERT OR IGNORE INTO message_labels(message_id, label_id, origin)
@@ -292,7 +211,6 @@ impl Repository for SqlxRepository {
         tracing::debug!(
             message_id = %record.id,
             attachment_count = record.attachments.len(),
-            tag_count = record.tags.len(),
             "ingested message"
         );
         Ok(())
@@ -305,7 +223,7 @@ impl Repository for SqlxRepository {
     ) -> Result<MessagePage<MessageSummary>, RepositoryError> {
         let search = query.search.as_deref().and_then(fts_query);
         let mut count = QueryBuilder::<Sqlite>::new("SELECT COUNT(DISTINCT m.id) FROM messages m");
-        append_list_joins(&mut count, query.tag_id, query.label_id, search.as_deref());
+        append_list_joins(&mut count, query.label_id, search.as_deref());
         append_list_filters(&mut count, &query, search.as_deref());
         let total: i64 = count.build_query_scalar().fetch_one(&self.pool).await?;
 
@@ -316,7 +234,7 @@ impl Repository for SqlxRepository {
              (SELECT COUNT(*) FROM attachments a WHERE a.message_id = m.id) AS attachment_count, \
              m.created_at FROM messages m",
         );
-        append_list_joins(&mut items, query.tag_id, query.label_id, search.as_deref());
+        append_list_joins(&mut items, query.label_id, search.as_deref());
         append_list_filters(&mut items, &query, search.as_deref());
         items
             .push(" ORDER BY m.created_at DESC, m.id DESC LIMIT ")
@@ -334,7 +252,6 @@ impl Repository for SqlxRepository {
         tracing::debug!(
             total,
             returned_count = items.len(),
-            tag_filter = ?query.tag_id,
             mailbox = %query.mailbox,
             limit = query.limit,
             offset = query.offset,
@@ -493,10 +410,6 @@ impl Repository for SqlxRepository {
                 .fetch_all(&mut *tx)
                 .await?;
 
-        sqlx::query("DELETE FROM message_tags WHERE message_id = ?1")
-            .bind(id)
-            .execute(&mut *tx)
-            .await?;
         sqlx::query("DELETE FROM attachments WHERE message_id = ?1")
             .bind(id)
             .execute(&mut *tx)
@@ -595,32 +508,6 @@ impl Repository for SqlxRepository {
         .await?;
         tracing::debug!(message_id = %id, found = row.is_some(), "retrieved message raw meta");
         Ok(row)
-    }
-
-    #[tracing::instrument(skip(self))]
-    async fn list_tags(&self) -> Result<Vec<Tag>, RepositoryError> {
-        let tags = sqlx::query_as::<_, Tag>(
-            r#"
-            SELECT
-                t.id,
-                t.kind,
-                t.value,
-                t.label,
-                t.source,
-                COUNT(m.id) AS message_count
-            FROM tags t
-            LEFT JOIN message_tags mt ON mt.tag_id = t.id
-            LEFT JOIN messages m ON m.id = mt.message_id AND m.mailbox = ?1
-            GROUP BY t.id
-            HAVING COUNT(m.id) > 0
-            ORDER BY t.kind, t.value
-            "#,
-        )
-        .bind(Mailbox::Inbox.as_str())
-        .fetch_all(&self.pool)
-        .await?;
-        tracing::debug!(tag_count = tags.len(), "listed tags");
-        Ok(tags)
     }
 
     async fn list_facets(
@@ -971,13 +858,9 @@ fn fts_query(value: &str) -> Option<String> {
 
 fn append_list_joins(
     builder: &mut QueryBuilder<'_, Sqlite>,
-    tag_id: Option<i64>,
     label_id: Option<i64>,
     search: Option<&str>,
 ) {
-    if tag_id.is_some() {
-        builder.push(" JOIN message_tags mt ON mt.message_id = m.id");
-    }
     if label_id.is_some() {
         builder.push(" JOIN message_labels ml_filter ON ml_filter.message_id = m.id");
     }
@@ -1008,9 +891,6 @@ fn append_list_filters<'a>(
     }
     if let Some(starred) = query.starred {
         builder.push(" AND m.is_starred = ").push_bind(starred);
-    }
-    if let Some(tag_id) = query.tag_id {
-        builder.push(" AND mt.tag_id = ").push_bind(tag_id);
     }
     if let Some(label_id) = query.label_id {
         builder
@@ -1122,7 +1002,7 @@ fn addresses_to_json(addresses: &[crate::mime_parser::MailAddress]) -> Option<St
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::repository::{InboundAttachmentRecord, InboundTagRecord};
+    use crate::repository::InboundAttachmentRecord;
 
     fn inbound_record(id: &str, attachment_id: &str, message_id: &str) -> InboundMessageRecord {
         let raw = format!(
@@ -1155,12 +1035,6 @@ mod tests {
                 size: 4,
                 path: format!("/tmp/{attachment_id}.txt"),
             }],
-            tags: vec![InboundTagRecord {
-                kind: "recipient_address".to_string(),
-                value: "to@example.com".to_string(),
-                label: "To: to@example.com".to_string(),
-                source: "system".to_string(),
-            }],
             label_ids: Vec::new(),
             initial_state: Default::default(),
         }
@@ -1177,8 +1051,9 @@ mod tests {
         assert!(tables.contains(&"_sqlx_migrations".to_string()));
         assert!(tables.contains(&"messages".to_string()));
         assert!(tables.contains(&"attachments".to_string()));
-        assert!(tables.contains(&"tags".to_string()));
-        assert!(tables.contains(&"message_tags".to_string()));
+        assert!(tables.contains(&"message_addresses".to_string()));
+        assert!(tables.contains(&"labels".to_string()));
+        assert!(tables.contains(&"message_labels".to_string()));
 
         let columns: Vec<String> =
             sqlx::query_scalar("SELECT name FROM pragma_table_info('messages')")
@@ -1210,7 +1085,6 @@ mod tests {
 
         let page = repo
             .list_messages(ListMessagesQuery {
-                tag_id: None,
                 label_id: None,
                 mailbox: Mailbox::Inbox,
                 search: None,
@@ -1282,7 +1156,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn mailbox_filtering_keeps_archive_out_of_inbox_and_tag_counts() {
+    async fn mailbox_filtering_keeps_archive_out_of_inbox() {
         let repo = SqlxRepository::init_pool_in_memory().await.unwrap();
         repo.ingest_message(inbound_record("msg-inbox", "att-inbox", "<msg-inbox>"))
             .await
@@ -1303,7 +1177,6 @@ mod tests {
 
         let inbox_page = repo
             .list_messages(ListMessagesQuery {
-                tag_id: None,
                 label_id: None,
                 mailbox: Mailbox::Inbox,
                 search: None,
@@ -1321,7 +1194,6 @@ mod tests {
 
         let archive_page = repo
             .list_messages(ListMessagesQuery {
-                tag_id: None,
                 label_id: None,
                 mailbox: Mailbox::Archive,
                 search: None,
@@ -1336,30 +1208,6 @@ mod tests {
         assert_eq!(archive_page.total, 1);
         assert_eq!(archive_page.items[0].id, "msg-archive");
         assert_eq!(archive_page.items[0].mailbox, Mailbox::Archive);
-
-        let tagged_inbox = repo
-            .list_messages(ListMessagesQuery {
-                tag_id: Some(1),
-                label_id: None,
-                mailbox: Mailbox::Inbox,
-                search: None,
-                read: None,
-                starred: None,
-                trashed: false,
-                limit: 20,
-                offset: 0,
-            })
-            .await
-            .unwrap();
-        assert_eq!(tagged_inbox.total, 1);
-        assert_eq!(tagged_inbox.items[0].id, "msg-inbox");
-
-        let tags = repo.list_tags().await.unwrap();
-        let recipient_tag = tags
-            .iter()
-            .find(|tag| tag.kind == "recipient_address")
-            .unwrap();
-        assert_eq!(recipient_tag.message_count, Some(1));
     }
 
     #[tokio::test]
@@ -1396,7 +1244,6 @@ mod tests {
 
         let page = repo
             .list_messages(ListMessagesQuery {
-                tag_id: None,
                 label_id: None,
                 mailbox: Mailbox::Inbox,
                 search: None,

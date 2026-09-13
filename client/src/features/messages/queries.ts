@@ -67,11 +67,7 @@ export function useUpdateMessageMailbox() {
   return createMutation(() => ({
     mutationFn: ({ id, mailbox }: UpdateMessageMailboxVariables) =>
       updateMessageMailbox(id, mailbox),
-    onSuccess: () =>
-      Promise.all([
-        queryClient.invalidateQueries({ queryKey: messagesKeys.all }),
-        queryClient.invalidateQueries({ queryKey: ['tags'] }),
-      ]),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: messagesKeys.all }),
   }));
 }
 
@@ -80,11 +76,7 @@ export function useDeleteMessage() {
 
   return createMutation(() => ({
     mutationFn: ({ id }: DeleteMessageVariables) => deleteMessage(id),
-    onSuccess: () =>
-      Promise.all([
-        queryClient.invalidateQueries({ queryKey: messagesKeys.all }),
-        queryClient.invalidateQueries({ queryKey: ['tags'] }),
-      ]),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: messagesKeys.all }),
   }));
 }
 

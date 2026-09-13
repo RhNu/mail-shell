@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use mail_shell_server::models::{InboundMetadata, Mailbox};
 use mail_shell_server::repository::{
-    InboundAttachmentRecord, InboundMessageRecord, InboundTagRecord, ListMessagesQuery, Repository,
+    InboundAttachmentRecord, InboundMessageRecord, ListMessagesQuery, Repository,
     sqlx::SqlxRepository,
 };
 use mail_shell_server::services::inbound::InboundMessageService;
@@ -45,20 +45,6 @@ fn sample_record(id: &str, attachment_id: &str, message_id: &str) -> InboundMess
             size: 4,
             path: format!("/tmp/{attachment_id}.bin"),
         }],
-        tags: vec![
-            InboundTagRecord {
-                kind: "recipient_address".to_string(),
-                value: "recipient@example.com".to_string(),
-                label: "To: recipient@example.com".to_string(),
-                source: "system".to_string(),
-            },
-            InboundTagRecord {
-                kind: "recipient_domain".to_string(),
-                value: "example.com".to_string(),
-                label: "Domain: example.com".to_string(),
-                source: "system".to_string(),
-            },
-        ],
         label_ids: Vec::new(),
         initial_state: Default::default(),
     }
@@ -74,7 +60,6 @@ async fn aggregate_ingest_persists_message_graph() {
 
     let page = repo
         .list_messages(ListMessagesQuery {
-            tag_id: None,
             label_id: None,
             mailbox: Mailbox::Inbox,
             search: None,
@@ -92,9 +77,6 @@ async fn aggregate_ingest_persists_message_graph() {
     let detail = repo.get_message("msg-1").await.unwrap().unwrap();
     assert_eq!(detail.message.id, "msg-1");
     assert_eq!(detail.attachments.len(), 1);
-
-    let tags = repo.list_tags().await.unwrap();
-    assert_eq!(tags.len(), 2);
 }
 
 #[tokio::test]
@@ -112,7 +94,6 @@ async fn aggregate_ingest_rolls_back_on_duplicate_message_id() {
 
     let page = repo
         .list_messages(ListMessagesQuery {
-            tag_id: None,
             label_id: None,
             mailbox: Mailbox::Inbox,
             search: None,

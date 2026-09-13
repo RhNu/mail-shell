@@ -5,7 +5,6 @@ use crate::models::{
     AttachmentDownloadMeta, AttachmentMeta, ClassificationRule, FacetValue, HeaderEntry, Label,
     LabelWriteRequest, Mailbox, MessageDetail, MessageLabel, MessageRawMeta,
     MessageStateUpdateRequest, MessageSummary, RuleWriteRequest, SavedView, SavedViewWriteRequest,
-    Tag,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -28,7 +27,6 @@ pub enum RepositoryError {
 
 #[derive(Debug, Clone)]
 pub struct ListMessagesQuery {
-    pub tag_id: Option<i64>,
     pub label_id: Option<i64>,
     pub mailbox: Mailbox,
     pub search: Option<String>,
@@ -67,14 +65,6 @@ pub struct InboundAttachmentRecord {
 }
 
 #[derive(Debug, Clone)]
-pub struct InboundTagRecord {
-    pub kind: String,
-    pub value: String,
-    pub label: String,
-    pub source: String,
-}
-
-#[derive(Debug, Clone)]
 pub struct InboundMessageRecord {
     pub id: String,
     pub message_id: Option<String>,
@@ -89,7 +79,6 @@ pub struct InboundMessageRecord {
     pub ingest_fingerprint: Option<String>,
     pub snapshot: ParsedMailSnapshotV1,
     pub attachments: Vec<InboundAttachmentRecord>,
-    pub tags: Vec<InboundTagRecord>,
     pub label_ids: Vec<i64>,
     pub initial_state: MessageStateUpdateRequest,
 }
@@ -143,8 +132,6 @@ pub trait Repository: Send + Sync {
     ) -> Result<Option<AttachmentDownloadMeta>, RepositoryError>;
 
     async fn get_message_raw(&self, id: &str) -> Result<Option<MessageRawMeta>, RepositoryError>;
-
-    async fn list_tags(&self) -> Result<Vec<Tag>, RepositoryError>;
 
     async fn list_facets(&self, kind: Option<&str>) -> Result<Vec<FacetValue>, RepositoryError>;
 

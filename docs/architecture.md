@@ -44,16 +44,13 @@ Core logical tables:
 
 - `messages`
 - `attachments`
-- `message_tags`
 - `message_addresses`
 - `message_fts`
 - `labels` and `message_labels`
 - `rules`
 - `saved_views`
 
-Migrations run synchronously before the HTTP listener starts. The v3 derived-index upgrade makes a
-one-time database backup and rebuilds address and search data before serving traffic. Later
-classification migrations are additive.
+Migrations run synchronously before the HTTP listener starts.
 
 ## Classification Model
 
@@ -69,9 +66,6 @@ views store structured message-list queries without copying messages. Ordered in
 envelope addresses, parsed addresses, subjects, or named headers, then apply labels and message
 state. Conditions use exact values as stored: local-part `+` semantics are deliberately not built
 into classification and can be expressed explicitly by a user rule if desired.
-
-The older system-tag tables and endpoint remain readable for upgrade compatibility, but new ingest
-does not populate them and the client does not use them for navigation.
 
 ## Serving Model
 

@@ -95,7 +95,7 @@ async fn test_openapi_document_exposes_core_routes() {
             .contains_key("patch")
     );
     assert!(paths.contains_key("/api/attachments/{id}"));
-    assert!(paths.contains_key("/api/tags"));
+    assert!(paths.contains_key("/api/labels"));
 }
 
 #[tokio::test]

@@ -15,14 +15,14 @@ const messagesListHookState = vi.hoisted(() => ({
 
 // oxlint-disable-next-line max-lines-per-function
 vi.mock('../features/messages/queries', () => ({
-  useMessagesList: (query: () => { tag?: number; page?: number; limit?: number }) => ({
+  useMessagesList: (query: () => { label?: number; page?: number; limit?: number }) => ({
     get data() {
       const current = query();
       const page = current.page ?? 1;
 
-      if (current.tag === 2) {
+      if (current.label === 2) {
         return {
-          items: page === 1 ? [buildMessage('msg-tag-2', 'Tag 2 first page')] : [],
+          items: page === 1 ? [buildMessage('msg-label-2', 'Label 2 first page')] : [],
           total: 1,
           limit: current.limit ?? 20,
         };
@@ -89,14 +89,14 @@ function buildMessage(id: string, subject: string) {
 }
 
 function TestHarness() {
-  const [tag, setTag] = createSignal<number | undefined>(1);
+  const [label, setLabel] = createSignal<number | undefined>(1);
 
   return (
     <>
-      <button type="button" onClick={() => setTag(2)}>
-        Switch tag
+      <button type="button" onClick={() => setLabel(2)}>
+        Switch label
       </button>
-      <InboxScreen title={<h1>Inbox</h1>} query={() => (tag() ? { tag: tag() } : {})} />
+      <InboxScreen title={<h1>Inbox</h1>} query={() => (label() ? { label: label() } : {})} />
     </>
   );
 }
@@ -126,8 +126,8 @@ it('resets pagination when the backing query changes', async () => {
   await fireEvent.click(screen.getByRole('button', { name: '3' }));
   expect(screen.getByText('General page 3')).toBeInTheDocument();
 
-  await fireEvent.click(screen.getByRole('button', { name: 'Switch tag' }));
-  expect(screen.getByText('Tag 2 first page')).toBeInTheDocument();
+  await fireEvent.click(screen.getByRole('button', { name: 'Switch label' }));
+  expect(screen.getByText('Label 2 first page')).toBeInTheDocument();
   expect(screen.queryByText('No messages yet')).not.toBeInTheDocument();
 });
 

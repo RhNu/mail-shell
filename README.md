@@ -187,9 +187,7 @@ Full CI details: [`docs/deployment-and-ci.md`](docs/deployment-and-ci.md).
 | PATCH/DELETE | `/api/saved-views/{id}` | Update or delete a saved query |
 | GET | `/api-docs/openapi.json` | OpenAPI spec |
 
-Database migrations run before the HTTP listener starts. Existing message snapshots are backfilled
-into address and search indexes, and a one-time `index.pre-v3.sqlite` backup is created before the
-first upgraded startup.
+Database migrations run before the HTTP listener starts.
 
 ## Documentation
 

@@ -132,17 +132,6 @@ pub struct MessageRawMeta {
     pub subject: String,
 }
 
-#[derive(Debug, Clone, sqlx::FromRow, Serialize, ToSchema)]
-pub struct Tag {
-    pub id: i64,
-    pub kind: String,
-    pub value: String,
-    pub label: String,
-    pub source: String,
-    #[sqlx(default)]
-    pub message_count: Option<i64>,
-}
-
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct MessageDetailResponse {
     #[serde(flatten)]

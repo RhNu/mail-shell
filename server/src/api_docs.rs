@@ -7,7 +7,6 @@ use crate::models::{
     MailboxUpdateRequest, MessageDetail, MessageDetailResponse, MessageHeadersResponse,
     MessageLabel, MessageLabelsUpdateRequest, MessageListResponse, MessageStateUpdateRequest,
     MessageSummary, RuleActions, RuleCondition, RuleWriteRequest, SavedView, SavedViewWriteRequest,
-    Tag,
 };
 
 #[allow(dead_code)]
@@ -33,7 +32,6 @@ pub(crate) struct InboundMultipartRequest {
         crate::routes::messages::raw_download,
         crate::routes::messages::headers,
         crate::routes::attachments::download,
-        crate::routes::tags::list,
         crate::routes::facets::list,
         crate::routes::labels::list,
         crate::routes::labels::create,
@@ -76,7 +74,6 @@ pub(crate) struct InboundMultipartRequest {
         RuleWriteRequest,
         SavedView,
         SavedViewWriteRequest,
-        Tag,
         crate::routes::health::HealthResponse,
     ))
 )]

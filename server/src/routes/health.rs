@@ -8,7 +8,6 @@ use crate::routes::AppState;
 #[derive(Serialize, ToSchema)]
 pub struct HealthResponse {
     pub status: &'static str,
-    pub classification_model: &'static str,
 }
 
 /// Simple health check endpoint.
@@ -20,8 +19,5 @@ pub struct HealthResponse {
 )]
 #[tracing::instrument]
 pub async fn handler(State(_state): State<AppState>) -> Json<HealthResponse> {
-    Json(HealthResponse {
-        status: "ok",
-        classification_model: "system-tags:recipient_address,recipient_domain,sender_domain",
-    })
+    Json(HealthResponse { status: "ok" })
 }

@@ -120,7 +120,6 @@ impl InboundMessageService {
                 ingest_fingerprint: Some(ingest_fingerprint),
                 snapshot: parsed.snapshot,
                 attachments,
-                tags: Vec::new(),
                 label_ids: classification.label_ids,
                 initial_state: classification.state,
             };
@@ -222,7 +221,6 @@ mod tests {
 
         let page = repo
             .list_messages(ListMessagesQuery {
-                tag_id: None,
                 label_id: None,
                 mailbox: Mailbox::Inbox,
                 search: None,
