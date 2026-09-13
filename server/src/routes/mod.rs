@@ -14,7 +14,10 @@ pub mod attachments;
 pub mod facets;
 pub mod health;
 pub mod inbound;
+pub mod labels;
 pub mod messages;
+pub mod rules;
+pub mod saved_views;
 pub mod tags;
 
 /// Shared application state passed to all Axum handlers.
@@ -56,6 +59,28 @@ pub fn router(state: AppState) -> Router {
         .route("/api/attachments/{id}", get(attachments::download))
         .route("/api/tags", get(tags::list))
         .route("/api/facets", get(facets::list))
+        .route("/api/labels", get(labels::list).post(labels::create))
+        .route(
+            "/api/labels/{id}",
+            patch(labels::update).delete(labels::delete),
+        )
+        .route(
+            "/api/messages/{id}/labels",
+            axum::routing::put(labels::set_message_labels),
+        )
+        .route("/api/rules", get(rules::list).post(rules::create))
+        .route(
+            "/api/rules/{id}",
+            patch(rules::update).delete(rules::delete),
+        )
+        .route(
+            "/api/saved-views",
+            get(saved_views::list).post(saved_views::create),
+        )
+        .route(
+            "/api/saved-views/{id}",
+            patch(saved_views::update).delete(saved_views::delete),
+        )
         .route("/api/trash", axum::routing::delete(messages::empty_trash))
         .with_state(state)
 }

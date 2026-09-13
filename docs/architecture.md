@@ -20,7 +20,9 @@ The runtime intentionally stays small:
 2. The Worker serializes the raw MIME payload and minimal envelope metadata.
 3. The Worker sends `POST /api/inbound` to the server using Cloudflare Access service-token headers.
 4. The server persists the raw MIME file, parses the message once, writes searchable indexes plus a versioned attachment-free parsed snapshot to SQLite, writes attachment blobs to disk, and exposes the result through `/api/*`.
-5. The client reads `/api/messages`, `/api/messages/:id`, `/api/tags`, and attachment download endpoints.
+5. Before persistence, enabled rules classify the message in priority order. Rule effects and the
+   message graph are committed together, so the client never observes a half-classified message.
+6. The client reads the message, label, saved-view, facet, and attachment APIs.
 
 ## Storage Model
 
@@ -45,8 +47,13 @@ Core logical tables:
 - `message_tags`
 - `message_addresses`
 - `message_fts`
+- `labels` and `message_labels`
+- `rules`
+- `saved_views`
 
-The current schema is intentionally destructive from earlier development versions. Existing data directories must be cleared before deploying this schema.
+Migrations run synchronously before the HTTP listener starts. The v3 derived-index upgrade makes a
+one-time database backup and rebuilds address and search data before serving traffic. Later
+classification migrations are additive.
 
 ## Classification Model
 
@@ -57,23 +64,14 @@ Classification separates durable user choices from derived system dimensions:
 - sender, recipient, and domain facets are derived from `message_addresses` and only appear when
   they currently contain messages
 
-The legacy ingest tag model remains available during the first upgrade stage:
+Labels are user-managed entities and do not disappear when their message count reaches zero. Saved
+views store structured message-list queries without copying messages. Ordered inbound rules match
+envelope addresses, parsed addresses, subjects, or named headers, then apply labels and message
+state. Conditions use exact values as stored: local-part `+` semantics are deliberately not built
+into classification and can be expressed explicitly by a user rule if desired.
 
-- each tag has `kind`
-- each tag has `value`
-- each tag has a display `label`
-- each tag has `source = system`
-
-The initial tag kinds are:
-
-- `recipient_address`
-- `recipient_domain`
-- `sender_domain`
-
-This keeps filtering simple while preserving structured data for future expansion.
-
-Mailbox state is separate from tags. Tag-filtered inbox views and tag message counts only include
-messages whose mailbox is `inbox`; archived messages are shown from the archive view instead.
+The older system-tag tables and endpoint remain readable for upgrade compatibility, but new ingest
+does not populate them and the client does not use them for navigation.
 
 ## Serving Model
 

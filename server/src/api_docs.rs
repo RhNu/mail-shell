@@ -2,10 +2,12 @@ use axum::Json;
 use utoipa::OpenApi;
 
 use crate::models::{
-    AttachmentMeta, BulkMessageStateUpdateRequest, ErrorResponse, FacetValue, HeaderEntry,
-    InboundMetadata, InboundResponse, Mailbox, MailboxUpdateRequest, MessageDetail,
-    MessageDetailResponse, MessageHeadersResponse, MessageListResponse, MessageStateUpdateRequest,
-    MessageSummary, Tag,
+    AttachmentMeta, BulkMessageStateUpdateRequest, ClassificationRule, ErrorResponse, FacetValue,
+    HeaderEntry, InboundMetadata, InboundResponse, Label, LabelWriteRequest, Mailbox,
+    MailboxUpdateRequest, MessageDetail, MessageDetailResponse, MessageHeadersResponse,
+    MessageLabel, MessageLabelsUpdateRequest, MessageListResponse, MessageStateUpdateRequest,
+    MessageSummary, RuleActions, RuleCondition, RuleWriteRequest, SavedView, SavedViewWriteRequest,
+    Tag,
 };
 
 #[allow(dead_code)]
@@ -33,6 +35,19 @@ pub(crate) struct InboundMultipartRequest {
         crate::routes::attachments::download,
         crate::routes::tags::list,
         crate::routes::facets::list,
+        crate::routes::labels::list,
+        crate::routes::labels::create,
+        crate::routes::labels::update,
+        crate::routes::labels::delete,
+        crate::routes::labels::set_message_labels,
+        crate::routes::rules::list,
+        crate::routes::rules::create,
+        crate::routes::rules::update,
+        crate::routes::rules::delete,
+        crate::routes::saved_views::list,
+        crate::routes::saved_views::create,
+        crate::routes::saved_views::update,
+        crate::routes::saved_views::delete,
     ),
     components(schemas(
         AttachmentMeta,
@@ -51,6 +66,16 @@ pub(crate) struct InboundMultipartRequest {
         MessageHeadersResponse,
         MessageListResponse,
         MessageSummary,
+        Label,
+        MessageLabel,
+        LabelWriteRequest,
+        MessageLabelsUpdateRequest,
+        ClassificationRule,
+        RuleCondition,
+        RuleActions,
+        RuleWriteRequest,
+        SavedView,
+        SavedViewWriteRequest,
         Tag,
         crate::routes::health::HealthResponse,
     ))

@@ -1,11 +1,9 @@
 import { type JSX, For } from 'solid-js';
 import type { Mailbox, MessageSummary } from '../features/messages/models';
-import type { Tag } from '../features/tags/api';
 import { MessageListItem } from './message-list-item';
 
 export type MessageListProps = {
   messages: MessageSummary[];
-  tagsMap: Map<string, Tag[]>;
   attachmentCounts: Map<string, number>;
   activeMessageId?: string;
   returnTo: string;
@@ -40,7 +38,7 @@ export function MessageList(props: MessageListProps): JSX.Element {
         {(message) => (
           <MessageListItem
             message={message}
-            tags={props.tagsMap.get(message.id) ?? []}
+            tags={message.labels}
             attachmentCount={props.attachmentCounts.get(message.id) ?? message.attachment_count}
             active={message.id === props.activeMessageId}
             returnTo={props.returnTo}

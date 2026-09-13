@@ -59,6 +59,8 @@ fn sample_record(id: &str, attachment_id: &str, message_id: &str) -> InboundMess
                 source: "system".to_string(),
             },
         ],
+        label_ids: Vec::new(),
+        initial_state: Default::default(),
     }
 }
 
@@ -73,6 +75,7 @@ async fn aggregate_ingest_persists_message_graph() {
     let page = repo
         .list_messages(ListMessagesQuery {
             tag_id: None,
+            label_id: None,
             mailbox: Mailbox::Inbox,
             search: None,
             read: None,
@@ -110,6 +113,7 @@ async fn aggregate_ingest_rolls_back_on_duplicate_message_id() {
     let page = repo
         .list_messages(ListMessagesQuery {
             tag_id: None,
+            label_id: None,
             mailbox: Mailbox::Inbox,
             search: None,
             read: None,

@@ -61,7 +61,6 @@ function MessageResults(props: ListSectionProps) {
       >
         <MessageList
           messages={props.data!.items}
-          tagsMap={new Map()}
           attachmentCounts={new Map()}
           returnTo={props.returnTo}
           onMoveToMailbox={props.onMoveToMailbox}
@@ -237,7 +236,7 @@ function useInboxState(query: Accessor<MessageListQuery>) {
   const queryKey = createMemo(() => JSON.stringify(query() ?? {}));
   const messagesQuery = useMessagesList(() => ({
     ...query(),
-    q: searchQuery().trim() || undefined,
+    q: searchQuery().trim() || query()?.q,
     page: page(),
     limit: DEFAULT_LIMIT,
   }));

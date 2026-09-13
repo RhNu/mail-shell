@@ -7,14 +7,21 @@ import { AttachmentList } from '../../components/attachment-list';
 import { sanitizeEmailHtml } from '../../lib/html-sanitize';
 import {
   backLabel,
+  hasHttpStatus,
   useDetailActions,
   useDetailReturn,
   type Mailbox,
 } from './message-detail-actions';
-import { MessageDetailMenu } from './message-detail-menu';
+import { MessageDetailMenu, MessageLabelsEditor } from './message-detail-menu';
 import { MessageHeadersDialogMount } from './message-headers-dialog-mount';
 
-function MessageMeta(props: { from: string; to: string; createdAt: string }) {
+function MessageMeta(props: {
+  from: string;
+  to: string;
+  createdAt: string;
+  messageId: string;
+  labelIds: number[];
+}) {
   return (
     <div class="flex flex-col gap-2 text-sm">
       <div class="flex items-start gap-2">
@@ -44,6 +51,7 @@ function MessageMeta(props: { from: string; to: string; createdAt: string }) {
           })}
         </time>
       </div>
+      <MessageLabelsEditor messageId={props.messageId} labelIds={props.labelIds} />
     </div>
   );
 }
@@ -143,6 +151,8 @@ function MessageLoadedState(props: {
           from={props.query.data!.from_address}
           to={props.query.data!.to_address ?? props.query.data!.envelope_to}
           createdAt={props.query.data!.created_at}
+          messageId={props.query.data!.id}
+          labelIds={props.query.data!.labels.map((label) => label.id)}
         />
       </div>
       <Show when={props.remoteResourcesBlocked}>
@@ -279,14 +289,5 @@ export function MessageDetailRoute() {
         onClose={() => setShowHeadersDialog(false)}
       />
     </section>
-  );
-}
-
-function hasHttpStatus(error: unknown, status: number): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'status' in error &&
-    (error as { status?: unknown }).status === status
   );
 }

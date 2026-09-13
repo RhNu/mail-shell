@@ -2,7 +2,7 @@ import { For } from 'solid-js';
 import type { JSX } from 'solid-js';
 import { Paperclip, Star } from 'lucide-solid';
 import type { Mailbox, MessageSummary } from '../features/messages/models';
-import type { Tag } from '../features/tags/api';
+import type { MessageLabel } from '../features/classification/api';
 import { TagChip } from './ui/tag-chip';
 import { messageDetailHref } from '../app/routes';
 import { formatRelativeTime } from '../lib/time';
@@ -10,7 +10,7 @@ import { MessageActionMenu } from './message-action-menu';
 
 export type MessageListItemProps = {
   message: MessageSummary;
-  tags: Tag[];
+  tags: MessageLabel[];
   attachmentCount?: number;
   active?: boolean;
   returnTo: string;
@@ -33,7 +33,7 @@ export type MessageListItemProps = {
 
 function MessageListItemLink(props: {
   message: MessageSummary;
-  tags: Tag[];
+  tags: MessageLabel[];
   attachmentCount?: number;
   returnTo: string;
 }) {
@@ -59,14 +59,14 @@ function MessageListItemLink(props: {
 
 function MessageListItemMeta(props: {
   message: MessageSummary;
-  tags: Tag[];
+  tags: MessageLabel[];
   attachmentCount?: number;
 }) {
   return (
     <div class="flex shrink-0 items-center gap-3">
       {props.tags.length > 0 && (
         <div class="hidden items-center gap-1 md:flex">
-          <For each={props.tags}>{(tag) => <TagChip label={tag.label} />}</For>
+          <For each={props.tags}>{(tag) => <TagChip label={tag.name} />}</For>
         </div>
       )}
       <span class="flex items-center gap-1.5 text-xs text-zinc-400 dark:text-zinc-500">

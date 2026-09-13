@@ -13,6 +13,7 @@ const messagesListHookState = vi.hoisted(() => ({
   deleteMessagePending: false,
 }));
 
+// oxlint-disable-next-line max-lines-per-function
 vi.mock('../features/messages/queries', () => ({
   useMessagesList: (query: () => { tag?: number; page?: number; limit?: number }) => ({
     get data() {
@@ -82,6 +83,7 @@ function buildMessage(id: string, subject: string) {
     is_read: true,
     is_starred: false,
     attachment_count: 0,
+    labels: [],
     created_at: '2026-06-05T10:30:00.000Z',
   };
 }

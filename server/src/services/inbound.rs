@@ -3,10 +3,7 @@ use std::{path::PathBuf, sync::Arc};
 use crate::{
     mime_parser::{MailAddress, parse_message},
     models::{InboundMetadata, InboundResponse},
-    repository::{
-        InboundAttachmentRecord, InboundMessageRecord, InboundTagRecord, Repository,
-        RepositoryError,
-    },
+    repository::{InboundAttachmentRecord, InboundMessageRecord, Repository, RepositoryError},
     services::notifier::{Notification, Notifier},
     storage,
 };
@@ -90,11 +87,15 @@ impl InboundMessageService {
                 });
             }
 
-            let tags = derive_tags(&metadata.envelope_to, &parsed.from);
-            tracing::debug!(derived_tag_count = tags.len(), "derived tags");
+            let rules = self.repo.list_rules(true).await?;
+            let classification = crate::services::classification::classify(
+                &rules,
+                &metadata.envelope_to,
+                &parsed.snapshot,
+            );
 
             let attachment_count = attachments.len();
-            let tag_count = tags.len();
+            let label_count = classification.label_ids.len();
 
             let notify_from = parsed.from.first().map(|a| a.display()).unwrap_or_default();
             let notify_subject = parsed.subject.clone();
@@ -119,14 +120,16 @@ impl InboundMessageService {
                 ingest_fingerprint: Some(ingest_fingerprint),
                 snapshot: parsed.snapshot,
                 attachments,
-                tags,
+                tags: Vec::new(),
+                label_ids: classification.label_ids,
+                initial_state: classification.state,
             };
 
             self.repo.ingest_message(record).await?;
             tracing::info!(
                 msg_id = %message_id,
                 attachment_count,
-                tag_count,
+                label_count,
                 "inbound message ingested"
             );
 
@@ -175,41 +178,6 @@ fn first_address_fields(addrs: &[MailAddress]) -> (Option<String>, Option<String
     }
 }
 
-fn derive_tags(envelope_to: &str, from: &[MailAddress]) -> Vec<InboundTagRecord> {
-    let normalized = envelope_to.trim().to_lowercase();
-    let mut tags = vec![InboundTagRecord {
-        kind: "recipient_address".to_string(),
-        value: normalized.clone(),
-        label: format!("To: {normalized}"),
-        source: "system".to_string(),
-    }];
-
-    if let Some((_, domain)) = normalized.rsplit_once('@') {
-        tags.push(InboundTagRecord {
-            kind: "recipient_domain".to_string(),
-            value: domain.to_string(),
-            label: format!("Domain: {domain}"),
-            source: "system".to_string(),
-        });
-    }
-
-    if let Some(from_addr) = from.first()
-        && let Some(addr) = &from_addr.address
-    {
-        let from_normalized = addr.trim().to_lowercase();
-        if let Some((_, domain)) = from_normalized.rsplit_once('@') {
-            tags.push(InboundTagRecord {
-                kind: "sender_domain".to_string(),
-                value: domain.to_string(),
-                label: format!("From domain: {domain}"),
-                source: "system".to_string(),
-            });
-        }
-    }
-
-    tags
-}
-
 async fn cleanup_files(paths: &[PathBuf]) {
     for path in paths {
         match tokio::fs::remove_file(path).await {
@@ -255,6 +223,7 @@ mod tests {
         let page = repo
             .list_messages(ListMessagesQuery {
                 tag_id: None,
+                label_id: None,
                 mailbox: Mailbox::Inbox,
                 search: None,
                 read: None,
@@ -297,21 +266,5 @@ mod tests {
         assert_eq!(detail.message.from_address, "noreply@discord.com");
         assert_eq!(detail.message.envelope_to, "discord+rhnu@rhnu.org");
         assert!(detail.message.body_html.is_some());
-    }
-
-    #[tokio::test]
-    async fn derive_tags_includes_sender_domain() {
-        let tags = derive_tags(
-            "to@example.com",
-            &[MailAddress {
-                name: Some("Discord".to_string()),
-                address: Some("noreply@discord.com".to_string()),
-            }],
-        );
-        assert_eq!(tags.len(), 3);
-        assert_eq!(tags[0].kind, "recipient_address");
-        assert_eq!(tags[1].kind, "recipient_domain");
-        assert_eq!(tags[2].kind, "sender_domain");
-        assert_eq!(tags[2].value, "discord.com");
     }
 }

@@ -55,7 +55,7 @@ function normalizeReturnTo(value: string | undefined): string {
     return value!;
   }
 
-  if (value && /^\/tags\/\d+$/u.test(value)) {
+  if (value && /^\/(labels|views)\/\d+$/u.test(value)) {
     return value;
   }
 
@@ -67,6 +67,16 @@ export function backLabel(path: string): string {
   if (path === '/unread') return '返回未读';
   if (path === '/starred') return '返回星标';
   if (path === '/trash') return '返回垃圾箱';
-  if (path.startsWith('/tags/')) return '返回标签';
+  if (path.startsWith('/labels/')) return '返回标签';
+  if (path.startsWith('/views/')) return '返回智能视图';
   return '返回收件箱';
+}
+
+export function hasHttpStatus(error: unknown, status: number): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'status' in error &&
+    (error as { status?: unknown }).status === status
+  );
 }

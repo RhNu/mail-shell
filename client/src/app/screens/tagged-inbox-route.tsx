@@ -1,14 +1,14 @@
 import { createMemo } from 'solid-js';
 import { useParams } from '@solidjs/router';
-import { useTagsList } from '../../features/tags/queries';
+import { useLabels } from '../../features/classification/queries';
 import { InboxScreen } from '../../components/inbox-screen';
 import { TagChip } from '../../components/ui/tag-chip';
 
-export function TaggedInboxRoute() {
-  const params = useParams<{ tagId: string }>();
-  const tagId = createMemo(() => Number(params.tagId));
-  const tagsQuery = useTagsList();
-  const tag = createMemo(() => tagsQuery.data?.find((t) => t.id === tagId()));
+export function LabelInboxRoute() {
+  const params = useParams<{ labelId: string }>();
+  const labelId = createMemo(() => Number(params.labelId));
+  const labelsQuery = useLabels();
+  const label = createMemo(() => labelsQuery.data?.find((item) => item.id === labelId()));
 
   return (
     <InboxScreen
@@ -22,12 +22,12 @@ export function TaggedInboxRoute() {
           </a>
           <span class="text-sm text-zinc-400 dark:text-zinc-500">/</span>
           <h1 class="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-            {tag()?.label ?? '已标签'}
+            {label()?.name ?? '标签'}
           </h1>
         </div>
       }
-      query={() => ({ tag: tagId(), mailbox: 'inbox' })}
-      tagChip={tag() ? <TagChip label={tag()!.label} active /> : undefined}
+      query={() => ({ label: labelId(), mailbox: 'inbox' })}
+      tagChip={label() ? <TagChip label={label()!.name} active /> : undefined}
       emptyDescription="没有符合此标签的邮件。"
     />
   );

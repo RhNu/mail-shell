@@ -6,24 +6,19 @@ import { HashRouter } from '@solidjs/router';
 import App from './App';
 import { queryClient } from './lib/query-client';
 
-vi.mock('./app/screens/inbox-route', () => ({
+vi.mock('./app/screens', () => ({
   InboxRoute: () => <h1>Inbox screen</h1>,
-}));
-
-vi.mock('./app/screens/archive-route', () => ({
   ArchiveRoute: () => <h1>Archive screen</h1>,
-}));
-
-vi.mock('./app/screens/message-detail-route', () => ({
   MessageDetailRoute: () => <h1>Message detail screen</h1>,
-}));
-
-vi.mock('./app/screens/tagged-inbox-route', () => ({
-  TaggedInboxRoute: () => <h1>Tagged inbox screen</h1>,
-}));
-
-vi.mock('./app/screens/not-found-route', () => ({
+  LabelInboxRoute: () => <h1>Label inbox screen</h1>,
   NotFoundRoute: () => <h1>Not found screen</h1>,
+  ClassificationRoute: () => null,
+  FacetsRoute: () => null,
+  SavedViewRoute: () => null,
+  SearchRoute: () => null,
+  StarredRoute: () => null,
+  TrashRoute: () => null,
+  UnreadRoute: () => null,
 }));
 
 vi.mock('./app/app-shell', () => ({
@@ -62,10 +57,10 @@ describe('App routes', () => {
     expect(await screen.findByRole('heading', { name: 'Archive screen' })).toBeInTheDocument();
   });
 
-  it('renders the tag inbox route for a selected tag', async () => {
-    renderApp('/tags/42');
+  it('renders the label inbox route for a selected label', async () => {
+    renderApp('/labels/42');
 
-    expect(await screen.findByRole('heading', { name: 'Tagged inbox screen' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Label inbox screen' })).toBeInTheDocument();
   });
 
   it('renders a not found route for unknown paths', async () => {

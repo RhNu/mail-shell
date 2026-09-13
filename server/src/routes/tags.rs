@@ -69,6 +69,8 @@ mod tests {
                     label: "To: to@example.com".to_string(),
                     source: "system".to_string(),
                 }],
+                label_ids: Vec::new(),
+                initial_state: Default::default(),
             })
             .await
             .unwrap();

@@ -1,77 +1,94 @@
-import { For } from 'solid-js';
+import { For, Show } from 'solid-js';
 import { useLocation } from '@solidjs/router';
-import { Hash } from 'lucide-solid';
-import { useTagsList } from '../features/tags/queries';
-import { tagInboxHref } from '../app/routes';
+import { Bookmark, Compass, Settings, Tag } from 'lucide-solid';
+import { useLabels, useSavedViews } from '../features/classification/queries';
+import type { Label, SavedView } from '../features/classification/api';
 
-function groupByKind<T extends { kind: string }>(items: T[]): Record<string, T[]> {
-  return items.reduce(
-    (acc, item) => {
-      if (!acc[item.kind]) acc[item.kind] = [];
-      acc[item.kind].push(item);
-      return acc;
-    },
-    {} as Record<string, T[]>,
+const itemClass = (active: boolean) =>
+  [
+    'flex items-center gap-2.5 rounded-sm px-3 py-1.5 text-sm transition-colors',
+    active
+      ? 'bg-zinc-200 font-medium text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100'
+      : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800',
+  ].join(' ');
+
+function PinnedViews(props: { views: SavedView[]; path: string; onNavigate?: () => void }) {
+  return (
+    <Show when={props.views.some((view) => view.pinned)}>
+      <div>
+        <p class="mb-1.5 px-3 text-xs font-semibold tracking-wider text-zinc-400">固定视图</p>
+        <For each={props.views.filter((view) => view.pinned)}>
+          {(view) => (
+            <a
+              href={`#/views/${view.id}`}
+              onClick={props.onNavigate}
+              class={itemClass(props.path === `/views/${view.id}`)}
+            >
+              <Bookmark size={14} />
+              <span class="truncate">{view.name}</span>
+            </a>
+          )}
+        </For>
+      </div>
+    </Show>
   );
 }
 
-function kindLabel(kind: string): string {
-  switch (kind) {
-    case 'recipient_address':
-      return '收件人';
-    case 'recipient_domain':
-      return '域名';
-    default:
-      return kind;
-  }
+function LabelsNav(props: { labels: Label[]; path: string; onNavigate?: () => void }) {
+  return (
+    <div>
+      <p class="mb-1.5 px-3 text-xs font-semibold tracking-wider text-zinc-400">标签</p>
+      <For each={props.labels}>
+        {(label) => (
+          <a
+            href={`#/labels/${label.id}`}
+            onClick={props.onNavigate}
+            class={itemClass(props.path === `/labels/${label.id}`)}
+          >
+            <Tag size={14} />
+            <span class="truncate">{label.name}</span>
+            <span class="ml-auto text-xs text-zinc-400">{label.message_count ?? 0}</span>
+          </a>
+        )}
+      </For>
+    </div>
+  );
 }
 
 export function TagNav(props: { onNavigate?: () => void } = {}) {
   const location = useLocation();
-  const tagsQuery = useTagsList();
-  const tags = () => tagsQuery.data ?? [];
-  const groups = () => groupByKind(tags());
-  const kinds = () => Object.keys(groups()).toSorted();
-
+  const labels = useLabels();
+  const views = useSavedViews();
   return (
-    <>
-      <For each={kinds()}>
-        {(kind) => (
-          <div class="mb-4">
-            <p class="mb-1.5 px-3 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-              {kindLabel(kind)}
-            </p>
-            <div class="flex flex-col gap-0.5">
-              <For each={groups()[kind]}>
-                {(tag) => {
-                  const href = `#${tagInboxHref(String(tag.id))}`;
-                  const active = location.pathname === `/tags/${tag.id}`;
-                  return (
-                    <a
-                      href={href}
-                      onClick={props.onNavigate}
-                      class={[
-                        'flex items-center gap-2.5 rounded-sm px-3 py-1.5 text-sm transition-colors',
-                        active
-                          ? 'bg-zinc-200 font-medium text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100'
-                          : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
-                      ].join(' ')}
-                    >
-                      <Hash size={14} class="shrink-0 opacity-60" />
-                      <span class="truncate">{tag.label}</span>
-                      {tag.message_count !== null && tag.message_count !== undefined && (
-                        <span class="ml-auto text-xs text-zinc-400 dark:text-zinc-500">
-                          {tag.message_count}
-                        </span>
-                      )}
-                    </a>
-                  );
-                }}
-              </For>
-            </div>
-          </div>
-        )}
-      </For>
-    </>
+    <div class="flex flex-col gap-4">
+      <PinnedViews
+        views={views.data ?? []}
+        path={location.pathname}
+        onNavigate={props.onNavigate}
+      />
+      <LabelsNav
+        labels={labels.data ?? []}
+        path={location.pathname}
+        onNavigate={props.onNavigate}
+      />
+      <div class="flex flex-col gap-0.5 border-t border-zinc-200 pt-3 dark:border-zinc-800">
+        <a
+          href="#/facets"
+          onClick={props.onNavigate}
+          class={itemClass(location.pathname === '/facets')}
+        >
+          <Compass size={14} />
+          浏览分类
+        </a>
+        <a
+          href="#/classification"
+          onClick={props.onNavigate}
+          class={itemClass(location.pathname === '/classification')}
+        >
+          <Settings size={14} />
+          分类设置
+        </a>
+      </div>
+    </div>
   );
 }

@@ -19,6 +19,7 @@ type MockMessageDetailQuery = {
     is_read: boolean;
     is_starred: boolean;
     trashed_at?: string | null;
+    labels: Array<{ id: number; name: string; color?: string | null }>;
     body_text: string;
     body_html: string;
     attachments: Array<{ id: string }>;
@@ -89,6 +90,13 @@ vi.mock('../../features/messages/queries', () => ({
   }),
 }));
 
+vi.mock('../../features/classification/queries', () => ({
+  useLabels: () => ({ data: [] }),
+  useClassificationMutations: () => ({
+    setMessageLabels: { mutate: vi.fn() },
+  }),
+}));
+
 function renderRoute(path = '/messages/msg-1') {
   window.location.hash = `#${path}`;
 
@@ -116,6 +124,7 @@ const baseMessageDetailData = {
   is_read: true,
   is_starred: false,
   trashed_at: null,
+  labels: [],
   body_text: 'Plain fallback',
   body_html: '<p>Hello</p>',
   attachments: [],

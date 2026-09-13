@@ -29,5 +29,7 @@ SQLite stores indexes and relationships. The filesystem stores raw MIME and atta
 
 ### Classification
 
-System tags are the smallest model that still carries data. This is enough to represent recipient-based filtering without committing to a larger rule engine.
-
+Fixed system views remain separate from user organization. Labels provide durable manual or
+rule-assigned organization, saved views preserve reusable structured queries, and derived facets
+offer ad-hoc browsing without creating permanent sidebar entries. Inbound rules are evaluated in
+the server before a message is committed so storage never exposes mixed classification state.

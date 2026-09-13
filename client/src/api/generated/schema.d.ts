@@ -74,6 +74,38 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/labels': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['listLabels'];
+    put?: never;
+    post: operations['createLabel'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/labels/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete: operations['deleteLabel'];
+    options?: never;
+    head?: never;
+    patch: operations['updateLabel'];
+    trace?: never;
+  };
   '/api/messages': {
     parameters: {
       query?: never;
@@ -138,6 +170,22 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/messages/{id}/labels': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put: operations['setMessageLabels'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/messages/{id}/mailbox': {
     parameters: {
       query?: never;
@@ -184,6 +232,70 @@ export interface paths {
     options?: never;
     head?: never;
     patch: operations['updateMessageState'];
+    trace?: never;
+  };
+  '/api/rules': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['listRules'];
+    put?: never;
+    post: operations['createRule'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/rules/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete: operations['deleteRule'];
+    options?: never;
+    head?: never;
+    patch: operations['updateRule'];
+    trace?: never;
+  };
+  '/api/saved-views': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['listSavedViews'];
+    put?: never;
+    post: operations['createSavedView'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/saved-views/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete: operations['deleteSavedView'];
+    options?: never;
+    head?: never;
+    patch: operations['updateSavedView'];
     trace?: never;
   };
   '/api/tags': {
@@ -233,6 +345,17 @@ export interface components {
     BulkMessageStateUpdateRequest: components['schemas']['MessageStateUpdateRequest'] & {
       ids: string[];
     };
+    ClassificationRule: {
+      actions: components['schemas']['RuleActions'];
+      conditions: components['schemas']['RuleCondition'][];
+      enabled: boolean;
+      /** Format: int64 */
+      id: number;
+      name: string;
+      /** Format: int64 */
+      priority: number;
+      stop_processing: boolean;
+    };
     ErrorResponse: {
       error: string;
     };
@@ -263,6 +386,20 @@ export interface components {
     InboundResponse: {
       id: string;
     };
+    Label: {
+      color?: string | null;
+      /** Format: int64 */
+      id: number;
+      /** Format: int64 */
+      message_count?: number | null;
+      name: string;
+      /** Format: int64 */
+      sort_order: number;
+    };
+    LabelWriteRequest: {
+      color?: string | null;
+      name: string;
+    };
     /** @enum {string} */
     Mailbox: 'inbox' | 'archive';
     MailboxUpdateRequest: {
@@ -282,6 +419,7 @@ export interface components {
       in_reply_to?: string | null;
       is_read: boolean;
       is_starred: boolean;
+      labels: components['schemas']['MessageLabel'][];
       mailbox: components['schemas']['Mailbox'];
       message_id?: string | null;
       reply_to?: string | null;
@@ -296,6 +434,15 @@ export interface components {
     };
     MessageHeadersResponse: {
       headers: components['schemas']['HeaderEntry'][];
+    };
+    MessageLabel: {
+      color?: string | null;
+      /** Format: int64 */
+      id: number;
+      name: string;
+    };
+    MessageLabelsUpdateRequest: {
+      label_ids: number[];
     };
     MessageListResponse: {
       items: components['schemas']['MessageSummary'][];
@@ -324,11 +471,49 @@ export interface components {
       id: string;
       is_read: boolean;
       is_starred: boolean;
+      labels: components['schemas']['MessageLabel'][];
       mailbox: components['schemas']['Mailbox'];
       message_id?: string | null;
       subject: string;
       to_address?: string | null;
       to_name?: string | null;
+    };
+    RuleActions: {
+      add_label_ids?: number[];
+      archive?: boolean | null;
+      mark_read?: boolean | null;
+      star?: boolean | null;
+      trash?: boolean | null;
+    };
+    RuleCondition: {
+      field: string;
+      operator: string;
+      value: string;
+    };
+    RuleWriteRequest: {
+      actions: components['schemas']['RuleActions'];
+      conditions: components['schemas']['RuleCondition'][];
+      enabled: boolean;
+      name: string;
+      /** Format: int64 */
+      priority: number;
+      stop_processing: boolean;
+    };
+    SavedView: {
+      /** Format: int64 */
+      id: number;
+      name: string;
+      pinned: boolean;
+      query: unknown;
+      /** Format: int64 */
+      sort_order: number;
+    };
+    SavedViewWriteRequest: {
+      name: string;
+      pinned: boolean;
+      query: unknown;
+      /** Format: int64 */
+      sort_order: number;
     };
     Tag: {
       /** Format: int64 */
@@ -476,6 +661,90 @@ export interface operations {
       };
     };
   };
+  listLabels: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Label'][];
+        };
+      };
+    };
+  };
+  createLabel: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['LabelWriteRequest'];
+      };
+    };
+    responses: {
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Label'];
+        };
+      };
+    };
+  };
+  deleteLabel: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  updateLabel: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['LabelWriteRequest'];
+      };
+    };
+    responses: {
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
   listMessages: {
     parameters: {
       query?: {
@@ -485,6 +754,8 @@ export interface operations {
         limit?: number;
         /** @description Filter by tag id */
         tag?: number;
+        /** @description Filter by user label id */
+        label?: number;
         /** @description Filter by mailbox; defaults to inbox */
         mailbox?: components['schemas']['Mailbox'];
         /** @description Full-text search */
@@ -665,6 +936,29 @@ export interface operations {
       };
     };
   };
+  setMessageLabels: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['MessageLabelsUpdateRequest'];
+      };
+    };
+    responses: {
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
   updateMessageMailbox: {
     parameters: {
       query?: never;
@@ -780,6 +1074,174 @@ export interface operations {
         content: {
           'application/json': components['schemas']['ErrorResponse'];
         };
+      };
+    };
+  };
+  listRules: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ClassificationRule'][];
+        };
+      };
+    };
+  };
+  createRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RuleWriteRequest'];
+      };
+    };
+    responses: {
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ClassificationRule'];
+        };
+      };
+    };
+  };
+  deleteRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  updateRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RuleWriteRequest'];
+      };
+    };
+    responses: {
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  listSavedViews: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SavedView'][];
+        };
+      };
+    };
+  };
+  createSavedView: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SavedViewWriteRequest'];
+      };
+    };
+    responses: {
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SavedView'];
+        };
+      };
+    };
+  };
+  deleteSavedView: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  updateSavedView: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SavedViewWriteRequest'];
+      };
+    };
+    responses: {
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
     };
   };

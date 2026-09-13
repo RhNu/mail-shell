@@ -214,8 +214,8 @@ impl Repository for SqlxRepository {
         let mut tx = self.pool.begin().await?;
 
         sqlx::query(
-            "INSERT INTO messages (id, message_id, subject, from_name, from_address, to_name, to_address, envelope_to, date, raw_path, ingest_fingerprint, snapshot_version, parsed_snapshot)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+            "INSERT INTO messages (id, message_id, subject, from_name, from_address, to_name, to_address, envelope_to, date, raw_path, ingest_fingerprint, snapshot_version, parsed_snapshot, mailbox, read_at, is_starred, trashed_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
         )
         .bind(&record.id)
         .bind(&record.message_id)
@@ -230,6 +230,10 @@ impl Repository for SqlxRepository {
         .bind(&record.ingest_fingerprint)
         .bind(SNAPSHOT_VERSION)
         .bind(&parsed_snapshot)
+        .bind(record.initial_state.mailbox.unwrap_or_default().as_str())
+        .bind(record.initial_state.read.filter(|read| *read).map(|_| Utc::now()))
+        .bind(record.initial_state.starred.unwrap_or(false))
+        .bind(record.initial_state.trashed.filter(|trashed| *trashed).map(|_| Utc::now()))
         .execute(&mut *tx)
         .await?;
 
@@ -271,6 +275,17 @@ impl Repository for SqlxRepository {
                 .await?;
         }
 
+        for label_id in &record.label_ids {
+            sqlx::query(
+                "INSERT OR IGNORE INTO message_labels(message_id, label_id, origin)
+                 VALUES (?1, ?2, 'rule')",
+            )
+            .bind(&record.id)
+            .bind(label_id)
+            .execute(&mut *tx)
+            .await?;
+        }
+
         insert_snapshot_indexes(&mut tx, &record).await?;
 
         tx.commit().await?;
@@ -290,7 +305,7 @@ impl Repository for SqlxRepository {
     ) -> Result<MessagePage<MessageSummary>, RepositoryError> {
         let search = query.search.as_deref().and_then(fts_query);
         let mut count = QueryBuilder::<Sqlite>::new("SELECT COUNT(DISTINCT m.id) FROM messages m");
-        append_list_joins(&mut count, query.tag_id, search.as_deref());
+        append_list_joins(&mut count, query.tag_id, query.label_id, search.as_deref());
         append_list_filters(&mut count, &query, search.as_deref());
         let total: i64 = count.build_query_scalar().fetch_one(&self.pool).await?;
 
@@ -301,17 +316,20 @@ impl Repository for SqlxRepository {
              (SELECT COUNT(*) FROM attachments a WHERE a.message_id = m.id) AS attachment_count, \
              m.created_at FROM messages m",
         );
-        append_list_joins(&mut items, query.tag_id, search.as_deref());
+        append_list_joins(&mut items, query.tag_id, query.label_id, search.as_deref());
         append_list_filters(&mut items, &query, search.as_deref());
         items
             .push(" ORDER BY m.created_at DESC, m.id DESC LIMIT ")
             .push_bind(query.limit)
             .push(" OFFSET ")
             .push_bind(query.offset);
-        let items = items
+        let mut items = items
             .build_query_as::<MessageSummary>()
             .fetch_all(&self.pool)
             .await?;
+        for item in &mut items {
+            item.labels = self.get_message_labels(&item.id).await?;
+        }
 
         tracing::debug!(
             total,
@@ -343,6 +361,7 @@ impl Repository for SqlxRepository {
         };
         let snapshot =
             Self::decode_snapshot(&stored.id, stored.snapshot_version, &stored.parsed_snapshot)?;
+        let labels = self.get_message_labels(&stored.id).await?;
         let message = MessageDetail {
             id: stored.id,
             from_name: stored.from_name,
@@ -360,6 +379,7 @@ impl Repository for SqlxRepository {
             is_read: stored.read_at.is_some(),
             is_starred: stored.is_starred,
             trashed_at: stored.trashed_at,
+            labels,
             body_text: snapshot.primary_body_text,
             body_html: snapshot.primary_body_html,
             created_at: stored.created_at,
@@ -630,6 +650,295 @@ impl Repository for SqlxRepository {
         };
         Ok(rows.into_iter().map(Into::into).collect())
     }
+
+    async fn list_labels(&self) -> Result<Vec<crate::models::Label>, RepositoryError> {
+        Ok(sqlx::query_as(
+            "SELECT l.id, l.name, l.color, l.sort_order, COUNT(m.id) AS message_count
+             FROM labels l
+             LEFT JOIN message_labels ml ON ml.label_id = l.id
+             LEFT JOIN messages m ON m.id = ml.message_id AND m.trashed_at IS NULL
+             GROUP BY l.id ORDER BY l.sort_order, l.name",
+        )
+        .fetch_all(&self.pool)
+        .await?)
+    }
+
+    async fn create_label(
+        &self,
+        request: &crate::models::LabelWriteRequest,
+    ) -> Result<crate::models::Label, RepositoryError> {
+        let name = request.name.trim();
+        if name.is_empty() {
+            return Err(RepositoryError::InvalidClassification(
+                "label name is empty".into(),
+            ));
+        }
+        let mut label: crate::models::Label = sqlx::query_as(
+            "INSERT INTO labels(name, color) VALUES (?1, ?2)
+             RETURNING id, name, color, sort_order, NULL AS message_count",
+        )
+        .bind(name)
+        .bind(&request.color)
+        .fetch_one(&self.pool)
+        .await?;
+        label.message_count = Some(0);
+        Ok(label)
+    }
+
+    async fn update_label(
+        &self,
+        id: i64,
+        request: &crate::models::LabelWriteRequest,
+    ) -> Result<bool, RepositoryError> {
+        let name = request.name.trim();
+        if name.is_empty() {
+            return Err(RepositoryError::InvalidClassification(
+                "label name is empty".into(),
+            ));
+        }
+        Ok(
+            sqlx::query("UPDATE labels SET name = ?1, color = ?2 WHERE id = ?3")
+                .bind(name)
+                .bind(&request.color)
+                .bind(id)
+                .execute(&self.pool)
+                .await?
+                .rows_affected()
+                > 0,
+        )
+    }
+
+    async fn delete_label(&self, id: i64) -> Result<bool, RepositoryError> {
+        Ok(sqlx::query("DELETE FROM labels WHERE id = ?1")
+            .bind(id)
+            .execute(&self.pool)
+            .await?
+            .rows_affected()
+            > 0)
+    }
+
+    async fn set_message_labels(
+        &self,
+        message_id: &str,
+        label_ids: &[i64],
+    ) -> Result<bool, RepositoryError> {
+        let mut tx = self.pool.begin().await?;
+        let exists: bool =
+            sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM messages WHERE id = ?1)")
+                .bind(message_id)
+                .fetch_one(&mut *tx)
+                .await?;
+        if !exists {
+            return Ok(false);
+        }
+        sqlx::query("DELETE FROM message_labels WHERE message_id = ?1 AND origin = 'manual'")
+            .bind(message_id)
+            .execute(&mut *tx)
+            .await?;
+        for label_id in label_ids {
+            sqlx::query(
+                "INSERT OR IGNORE INTO message_labels(message_id, label_id, origin)
+                 VALUES (?1, ?2, 'manual')",
+            )
+            .bind(message_id)
+            .bind(label_id)
+            .execute(&mut *tx)
+            .await?;
+        }
+        tx.commit().await?;
+        Ok(true)
+    }
+
+    async fn get_message_labels(
+        &self,
+        message_id: &str,
+    ) -> Result<Vec<crate::models::MessageLabel>, RepositoryError> {
+        Ok(sqlx::query_as(
+            "SELECT l.id, l.name, l.color FROM labels l
+             JOIN message_labels ml ON ml.label_id = l.id
+             WHERE ml.message_id = ?1 ORDER BY l.sort_order, l.name",
+        )
+        .bind(message_id)
+        .fetch_all(&self.pool)
+        .await?)
+    }
+
+    async fn list_rules(
+        &self,
+        enabled_only: bool,
+    ) -> Result<Vec<crate::models::ClassificationRule>, RepositoryError> {
+        let rows = sqlx::query_as::<_, StoredRule>(
+            "SELECT id, name, enabled, priority, stop_processing, conditions_json, actions_json
+             FROM rules WHERE (?1 = 0 OR enabled = 1) ORDER BY priority DESC, id",
+        )
+        .bind(enabled_only)
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter().map(decode_rule).collect()
+    }
+
+    async fn create_rule(
+        &self,
+        request: &crate::models::RuleWriteRequest,
+    ) -> Result<crate::models::ClassificationRule, RepositoryError> {
+        let conditions = serde_json::to_string(&request.conditions)
+            .map_err(|error| RepositoryError::InvalidClassification(error.to_string()))?;
+        let actions = serde_json::to_string(&request.actions)
+            .map_err(|error| RepositoryError::InvalidClassification(error.to_string()))?;
+        let row = sqlx::query_as::<_, StoredRule>(
+            "INSERT INTO rules(name, enabled, priority, stop_processing, conditions_json, actions_json)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             RETURNING id, name, enabled, priority, stop_processing, conditions_json, actions_json",
+        )
+        .bind(request.name.trim())
+        .bind(request.enabled)
+        .bind(request.priority)
+        .bind(request.stop_processing)
+        .bind(conditions)
+        .bind(actions)
+        .fetch_one(&self.pool)
+        .await?;
+        decode_rule(row)
+    }
+
+    async fn update_rule(
+        &self,
+        id: i64,
+        request: &crate::models::RuleWriteRequest,
+    ) -> Result<bool, RepositoryError> {
+        let conditions = serde_json::to_string(&request.conditions)
+            .map_err(|error| RepositoryError::InvalidClassification(error.to_string()))?;
+        let actions = serde_json::to_string(&request.actions)
+            .map_err(|error| RepositoryError::InvalidClassification(error.to_string()))?;
+        Ok(sqlx::query(
+            "UPDATE rules SET name=?1, enabled=?2, priority=?3, stop_processing=?4,
+             conditions_json=?5, actions_json=?6, updated_at=CURRENT_TIMESTAMP WHERE id=?7",
+        )
+        .bind(request.name.trim())
+        .bind(request.enabled)
+        .bind(request.priority)
+        .bind(request.stop_processing)
+        .bind(conditions)
+        .bind(actions)
+        .bind(id)
+        .execute(&self.pool)
+        .await?
+        .rows_affected()
+            > 0)
+    }
+
+    async fn delete_rule(&self, id: i64) -> Result<bool, RepositoryError> {
+        Ok(sqlx::query("DELETE FROM rules WHERE id = ?1")
+            .bind(id)
+            .execute(&self.pool)
+            .await?
+            .rows_affected()
+            > 0)
+    }
+
+    async fn list_saved_views(&self) -> Result<Vec<crate::models::SavedView>, RepositoryError> {
+        let rows = sqlx::query_as::<_, StoredSavedView>(
+            "SELECT id, name, query_json, pinned, sort_order FROM saved_views
+             ORDER BY pinned DESC, sort_order, name",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter().map(decode_saved_view).collect()
+    }
+
+    async fn create_saved_view(
+        &self,
+        request: &crate::models::SavedViewWriteRequest,
+    ) -> Result<crate::models::SavedView, RepositoryError> {
+        let query = serde_json::to_string(&request.query)
+            .map_err(|error| RepositoryError::InvalidClassification(error.to_string()))?;
+        let row = sqlx::query_as::<_, StoredSavedView>(
+            "INSERT INTO saved_views(name, query_json, pinned, sort_order) VALUES (?1, ?2, ?3, ?4)
+             RETURNING id, name, query_json, pinned, sort_order",
+        )
+        .bind(request.name.trim())
+        .bind(query)
+        .bind(request.pinned)
+        .bind(request.sort_order)
+        .fetch_one(&self.pool)
+        .await?;
+        decode_saved_view(row)
+    }
+
+    async fn update_saved_view(
+        &self,
+        id: i64,
+        request: &crate::models::SavedViewWriteRequest,
+    ) -> Result<bool, RepositoryError> {
+        let query = serde_json::to_string(&request.query)
+            .map_err(|error| RepositoryError::InvalidClassification(error.to_string()))?;
+        Ok(sqlx::query(
+            "UPDATE saved_views SET name=?1, query_json=?2, pinned=?3, sort_order=?4 WHERE id=?5",
+        )
+        .bind(request.name.trim())
+        .bind(query)
+        .bind(request.pinned)
+        .bind(request.sort_order)
+        .bind(id)
+        .execute(&self.pool)
+        .await?
+        .rows_affected()
+            > 0)
+    }
+
+    async fn delete_saved_view(&self, id: i64) -> Result<bool, RepositoryError> {
+        Ok(sqlx::query("DELETE FROM saved_views WHERE id = ?1")
+            .bind(id)
+            .execute(&self.pool)
+            .await?
+            .rows_affected()
+            > 0)
+    }
+}
+
+#[derive(sqlx::FromRow)]
+struct StoredRule {
+    id: i64,
+    name: String,
+    enabled: bool,
+    priority: i64,
+    stop_processing: bool,
+    conditions_json: String,
+    actions_json: String,
+}
+
+fn decode_rule(row: StoredRule) -> Result<crate::models::ClassificationRule, RepositoryError> {
+    Ok(crate::models::ClassificationRule {
+        id: row.id,
+        name: row.name,
+        enabled: row.enabled,
+        priority: row.priority,
+        stop_processing: row.stop_processing,
+        conditions: serde_json::from_str(&row.conditions_json)
+            .map_err(|error| RepositoryError::InvalidClassification(error.to_string()))?,
+        actions: serde_json::from_str(&row.actions_json)
+            .map_err(|error| RepositoryError::InvalidClassification(error.to_string()))?,
+    })
+}
+
+#[derive(sqlx::FromRow)]
+struct StoredSavedView {
+    id: i64,
+    name: String,
+    query_json: String,
+    pinned: bool,
+    sort_order: i64,
+}
+
+fn decode_saved_view(row: StoredSavedView) -> Result<crate::models::SavedView, RepositoryError> {
+    Ok(crate::models::SavedView {
+        id: row.id,
+        name: row.name,
+        query: serde_json::from_str(&row.query_json)
+            .map_err(|error| RepositoryError::InvalidClassification(error.to_string()))?,
+        pinned: row.pinned,
+        sort_order: row.sort_order,
+    })
 }
 
 #[derive(sqlx::FromRow)]
@@ -663,10 +972,14 @@ fn fts_query(value: &str) -> Option<String> {
 fn append_list_joins(
     builder: &mut QueryBuilder<'_, Sqlite>,
     tag_id: Option<i64>,
+    label_id: Option<i64>,
     search: Option<&str>,
 ) {
     if tag_id.is_some() {
         builder.push(" JOIN message_tags mt ON mt.message_id = m.id");
+    }
+    if label_id.is_some() {
+        builder.push(" JOIN message_labels ml_filter ON ml_filter.message_id = m.id");
     }
     if search.is_some() {
         builder.push(" JOIN message_fts ON message_fts.message_id = m.id");
@@ -698,6 +1011,11 @@ fn append_list_filters<'a>(
     }
     if let Some(tag_id) = query.tag_id {
         builder.push(" AND mt.tag_id = ").push_bind(tag_id);
+    }
+    if let Some(label_id) = query.label_id {
+        builder
+            .push(" AND ml_filter.label_id = ")
+            .push_bind(label_id);
     }
     if let Some(search) = search {
         builder.push(" AND message_fts MATCH ").push_bind(search);
@@ -843,6 +1161,8 @@ mod tests {
                 label: "To: to@example.com".to_string(),
                 source: "system".to_string(),
             }],
+            label_ids: Vec::new(),
+            initial_state: Default::default(),
         }
     }
 
@@ -891,6 +1211,7 @@ mod tests {
         let page = repo
             .list_messages(ListMessagesQuery {
                 tag_id: None,
+                label_id: None,
                 mailbox: Mailbox::Inbox,
                 search: None,
                 read: None,
@@ -983,6 +1304,7 @@ mod tests {
         let inbox_page = repo
             .list_messages(ListMessagesQuery {
                 tag_id: None,
+                label_id: None,
                 mailbox: Mailbox::Inbox,
                 search: None,
                 read: None,
@@ -1000,6 +1322,7 @@ mod tests {
         let archive_page = repo
             .list_messages(ListMessagesQuery {
                 tag_id: None,
+                label_id: None,
                 mailbox: Mailbox::Archive,
                 search: None,
                 read: None,
@@ -1017,6 +1340,7 @@ mod tests {
         let tagged_inbox = repo
             .list_messages(ListMessagesQuery {
                 tag_id: Some(1),
+                label_id: None,
                 mailbox: Mailbox::Inbox,
                 search: None,
                 read: None,
@@ -1073,6 +1397,7 @@ mod tests {
         let page = repo
             .list_messages(ListMessagesQuery {
                 tag_id: None,
+                label_id: None,
                 mailbox: Mailbox::Inbox,
                 search: None,
                 read: None,

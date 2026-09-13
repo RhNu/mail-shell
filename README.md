@@ -20,7 +20,8 @@ Email → Cloudflare → Worker → POST /api/inbound → Server (SQLite + files
 
 - Worker forwards raw MIME and envelope metadata via multipart POST.
 - Server persists raw `.eml` files for download, parses each message once, stores searchable indexes plus a versioned parsed snapshot in SQLite, and stores attachments as separate blobs.
-- Classification is modeled as system tags (kind/value/label), not free-form folders.
+- Classification combines fixed mailbox views, durable user labels, saved searches, rules, and
+  non-empty sender/recipient/domain facets.
 - On successful ingest, the server can push a notification through the configured notifier.
 - The client uses hash routing; the server serves `client/dist` as static assets.
 
@@ -175,8 +176,14 @@ Full CI details: [`docs/deployment-and-ci.md`](docs/deployment-and-ci.md).
 | GET | `/api/messages/{id}/headers` | Parsed top-level message headers from the stored snapshot |
 | GET | `/api/messages/{id}/raw` | Raw EML download |
 | GET | `/api/attachments/{id}` | Binary attachment download |
-| GET | `/api/tags` | All tags with message counts |
 | GET | `/api/facets` | Browse non-empty recipient, sender, and domain facets |
+| GET/POST | `/api/labels` | List or create durable user labels |
+| PATCH/DELETE | `/api/labels/{id}` | Rename, recolor, reorder, or delete a label |
+| PUT | `/api/messages/{id}/labels` | Replace a message's manual labels |
+| GET/POST | `/api/rules` | List or create ordered inbound classification rules |
+| PATCH/DELETE | `/api/rules/{id}` | Update or delete a rule |
+| GET/POST | `/api/saved-views` | List or create saved message queries |
+| PATCH/DELETE | `/api/saved-views/{id}` | Update or delete a saved query |
 | GET | `/api-docs/openapi.json` | OpenAPI spec |
 
 Database migrations run before the HTTP listener starts. Existing message snapshots are backfilled

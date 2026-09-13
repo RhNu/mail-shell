@@ -6,7 +6,10 @@ export const appRoutes = {
   starred: '/starred',
   trash: '/trash',
   messageDetail: '/messages/:messageId',
-  tagInbox: '/tags/:tagId',
+  labelInbox: '/labels/:labelId',
+  savedView: '/views/:viewId',
+  facets: '/facets',
+  classification: '/classification',
   notFound: '*',
 } as const;
 
@@ -18,5 +21,5 @@ export function messageDetailHref(messageId: string, returnTo?: string): string 
 }
 
 export function tagInboxHref(tagId: string | number): string {
-  return `/tags/${tagId}`;
+  return `/labels/${tagId}`;
 }

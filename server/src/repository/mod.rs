@@ -2,8 +2,10 @@ use async_trait::async_trait;
 
 use crate::mime_parser::ParsedMailSnapshotV1;
 use crate::models::{
-    AttachmentDownloadMeta, AttachmentMeta, FacetValue, HeaderEntry, Mailbox, MessageDetail,
-    MessageRawMeta, MessageStateUpdateRequest, MessageSummary, Tag,
+    AttachmentDownloadMeta, AttachmentMeta, ClassificationRule, FacetValue, HeaderEntry, Label,
+    LabelWriteRequest, Mailbox, MessageDetail, MessageLabel, MessageRawMeta,
+    MessageStateUpdateRequest, MessageSummary, RuleWriteRequest, SavedView, SavedViewWriteRequest,
+    Tag,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -20,11 +22,14 @@ pub enum RepositoryError {
     },
     #[error("message {message_id} uses unsupported parsed snapshot version {version}")]
     UnsupportedSnapshotVersion { message_id: String, version: i64 },
+    #[error("invalid classification data: {0}")]
+    InvalidClassification(String),
 }
 
 #[derive(Debug, Clone)]
 pub struct ListMessagesQuery {
     pub tag_id: Option<i64>,
+    pub label_id: Option<i64>,
     pub mailbox: Mailbox,
     pub search: Option<String>,
     pub read: Option<bool>,
@@ -85,6 +90,8 @@ pub struct InboundMessageRecord {
     pub snapshot: ParsedMailSnapshotV1,
     pub attachments: Vec<InboundAttachmentRecord>,
     pub tags: Vec<InboundTagRecord>,
+    pub label_ids: Vec<i64>,
+    pub initial_state: MessageStateUpdateRequest,
 }
 
 #[async_trait]
@@ -140,6 +147,51 @@ pub trait Repository: Send + Sync {
     async fn list_tags(&self) -> Result<Vec<Tag>, RepositoryError>;
 
     async fn list_facets(&self, kind: Option<&str>) -> Result<Vec<FacetValue>, RepositoryError>;
+
+    async fn list_labels(&self) -> Result<Vec<Label>, RepositoryError>;
+    async fn create_label(&self, request: &LabelWriteRequest) -> Result<Label, RepositoryError>;
+    async fn update_label(
+        &self,
+        id: i64,
+        request: &LabelWriteRequest,
+    ) -> Result<bool, RepositoryError>;
+    async fn delete_label(&self, id: i64) -> Result<bool, RepositoryError>;
+    async fn set_message_labels(
+        &self,
+        message_id: &str,
+        label_ids: &[i64],
+    ) -> Result<bool, RepositoryError>;
+    async fn get_message_labels(
+        &self,
+        message_id: &str,
+    ) -> Result<Vec<MessageLabel>, RepositoryError>;
+
+    async fn list_rules(
+        &self,
+        enabled_only: bool,
+    ) -> Result<Vec<ClassificationRule>, RepositoryError>;
+    async fn create_rule(
+        &self,
+        request: &RuleWriteRequest,
+    ) -> Result<ClassificationRule, RepositoryError>;
+    async fn update_rule(
+        &self,
+        id: i64,
+        request: &RuleWriteRequest,
+    ) -> Result<bool, RepositoryError>;
+    async fn delete_rule(&self, id: i64) -> Result<bool, RepositoryError>;
+
+    async fn list_saved_views(&self) -> Result<Vec<SavedView>, RepositoryError>;
+    async fn create_saved_view(
+        &self,
+        request: &SavedViewWriteRequest,
+    ) -> Result<SavedView, RepositoryError>;
+    async fn update_saved_view(
+        &self,
+        id: i64,
+        request: &SavedViewWriteRequest,
+    ) -> Result<bool, RepositoryError>;
+    async fn delete_saved_view(&self, id: i64) -> Result<bool, RepositoryError>;
 }
 
 pub mod sqlx;

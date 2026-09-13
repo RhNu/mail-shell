@@ -19,6 +19,7 @@ pub struct ListQuery {
     page: Option<u32>,
     limit: Option<u32>,
     tag: Option<i64>,
+    label: Option<i64>,
     mailbox: Option<Mailbox>,
     q: Option<String>,
     read: Option<bool>,
@@ -34,6 +35,7 @@ pub struct ListQuery {
         ("page" = Option<u32>, Query, description = "1-based page number"),
         ("limit" = Option<u32>, Query, description = "Page size between 1 and 100"),
         ("tag" = Option<i64>, Query, description = "Filter by tag id"),
+        ("label" = Option<i64>, Query, description = "Filter by user label id"),
         ("mailbox" = Option<Mailbox>, Query, description = "Filter by mailbox; defaults to inbox"),
         ("q" = Option<String>, Query, description = "Full-text search"),
         ("read" = Option<bool>, Query, description = "Filter by read state"),
@@ -58,6 +60,7 @@ pub async fn list(
         .repo
         .list_messages(ListMessagesQuery {
             tag_id: query.tag,
+            label_id: query.label,
             mailbox: query.mailbox.unwrap_or_default(),
             search: query.q.filter(|value| !value.trim().is_empty()),
             read: query.read,
@@ -376,6 +379,8 @@ mod tests {
                     .snapshot,
                 attachments: Vec::new(),
                 tags: Vec::new(),
+                label_ids: Vec::new(),
+                initial_state: Default::default(),
             })
             .await
             .unwrap();
@@ -391,6 +396,7 @@ mod tests {
             page: Some(1),
             limit: Some(2),
             tag: None,
+            label: None,
             mailbox: None,
             q: None,
             read: None,
@@ -433,6 +439,8 @@ mod tests {
                     label: "To: to@example.com".to_string(),
                     source: "system".to_string(),
                 }],
+                label_ids: Vec::new(),
+                initial_state: Default::default(),
             })
             .await
             .unwrap();
@@ -441,6 +449,7 @@ mod tests {
             page: None,
             limit: None,
             tag: Some(1),
+            label: None,
             mailbox: None,
             q: None,
             read: None,

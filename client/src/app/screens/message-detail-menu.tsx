@@ -34,3 +34,5 @@ export function MessageDetailMenu(props: MessageDetailMenuProps) {
     />
   );
 }
+
+export { MessageLabelsEditor } from '../../components/classification/message-labels-editor';

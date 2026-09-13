@@ -148,22 +148,22 @@ async fn test_full_inbound_and_read_roundtrip() {
     assert_eq!(detail["subject"], "Hello Roundtrip");
     assert_eq!(detail["body_text"], "Roundtrip body");
 
-    // 4. GET tags
+    // 4. GET derived recipient facets
     let req = Request::builder()
-        .uri("/api/tags")
+        .uri("/api/facets?kind=recipient")
         .body(Body::empty())
         .unwrap();
     let res = app.clone().oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::OK);
     let body_bytes = res.into_body().collect().await.unwrap().to_bytes();
-    let tags: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
-    let recipient_tag = tags
+    let facets: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    let recipient = facets
         .as_array()
         .unwrap()
         .iter()
-        .find(|t| t["kind"] == "recipient_address")
+        .find(|facet| facet["value"] == "recipient@example.com")
         .unwrap();
-    assert_eq!(recipient_tag["message_count"], 1);
+    assert_eq!(recipient["message_count"], 1);
 }
 
 #[tokio::test]

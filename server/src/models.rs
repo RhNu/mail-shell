@@ -81,6 +81,8 @@ pub struct MessageSummary {
     pub is_read: bool,
     pub is_starred: bool,
     pub attachment_count: i64,
+    #[sqlx(skip)]
+    pub labels: Vec<MessageLabel>,
     pub created_at: DateTime<Utc>,
 }
 
@@ -102,6 +104,7 @@ pub struct MessageDetail {
     pub is_read: bool,
     pub is_starred: bool,
     pub trashed_at: Option<DateTime<Utc>>,
+    pub labels: Vec<MessageLabel>,
     pub body_text: Option<String>,
     pub body_html: Option<String>,
     pub created_at: DateTime<Utc>,
@@ -181,7 +184,7 @@ pub struct MailboxUpdateRequest {
     pub mailbox: Mailbox,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct MessageStateUpdateRequest {
     pub mailbox: Option<Mailbox>,
     pub read: Option<bool>,
@@ -202,4 +205,87 @@ pub struct FacetValue {
     pub value: String,
     pub label: String,
     pub message_count: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, sqlx::FromRow)]
+pub struct Label {
+    pub id: i64,
+    pub name: String,
+    pub color: Option<String>,
+    pub sort_order: i64,
+    #[sqlx(default)]
+    pub message_count: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, sqlx::FromRow)]
+pub struct MessageLabel {
+    pub id: i64,
+    pub name: String,
+    pub color: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct LabelWriteRequest {
+    pub name: String,
+    pub color: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct MessageLabelsUpdateRequest {
+    pub label_ids: Vec<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct RuleCondition {
+    pub field: String,
+    pub operator: String,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
+pub struct RuleActions {
+    #[serde(default)]
+    pub add_label_ids: Vec<i64>,
+    pub archive: Option<bool>,
+    pub mark_read: Option<bool>,
+    pub star: Option<bool>,
+    pub trash: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct ClassificationRule {
+    pub id: i64,
+    pub name: String,
+    pub enabled: bool,
+    pub priority: i64,
+    pub stop_processing: bool,
+    pub conditions: Vec<RuleCondition>,
+    pub actions: RuleActions,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct RuleWriteRequest {
+    pub name: String,
+    pub enabled: bool,
+    pub priority: i64,
+    pub stop_processing: bool,
+    pub conditions: Vec<RuleCondition>,
+    pub actions: RuleActions,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct SavedView {
+    pub id: i64,
+    pub name: String,
+    pub query: serde_json::Value,
+    pub pinned: bool,
+    pub sort_order: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct SavedViewWriteRequest {
+    pub name: String,
+    pub query: serde_json::Value,
+    pub pinned: bool,
+    pub sort_order: i64,
 }
