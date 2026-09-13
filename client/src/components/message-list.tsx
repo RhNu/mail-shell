@@ -1,4 +1,4 @@
-import { createMemo, type JSX, For } from 'solid-js';
+import { type JSX, For } from 'solid-js';
 import type { Mailbox, MessageSummary } from '../features/messages/models';
 import type { Tag } from '../features/tags/api';
 import { MessageListItem } from './message-list-item';
@@ -8,29 +8,26 @@ export type MessageListProps = {
   tagsMap: Map<string, Tag[]>;
   attachmentCounts: Map<string, number>;
   activeMessageId?: string;
-  searchQuery: string;
   returnTo: string;
   // eslint-disable-next-line no-unused-vars
   onMoveToMailbox?: (_id: string, _mailbox: Mailbox) => void;
   // eslint-disable-next-line no-unused-vars
   onDelete?: (_id: string) => void;
+  onUpdateState?: (
+    // eslint-disable-next-line no-unused-vars
+    _id: string,
+    // eslint-disable-next-line no-unused-vars
+    _state: { read?: boolean; starred?: boolean; trashed?: boolean },
+  ) => void;
+  trashView?: boolean;
+  selectedIds?: Set<string>;
+  // eslint-disable-next-line no-unused-vars
+  onSelectedChange?: (_id: string, _selected: boolean) => void;
   actionsDisabled?: boolean;
 };
 
 export function MessageList(props: MessageListProps): JSX.Element {
-  const filteredMessages = createMemo(() => {
-    const query = props.searchQuery.trim().toLowerCase();
-    if (!query) return props.messages;
-
-    return props.messages.filter((m) => {
-      const from = m.from_address.toLowerCase();
-      const subject = (m.subject ?? '').toLowerCase();
-      const tags = (props.tagsMap.get(m.id) ?? []).map((t) => t.label.toLowerCase()).join(' ');
-      return from.includes(query) || subject.includes(query) || tags.includes(query);
-    });
-  });
-
-  const hasMessages = () => filteredMessages().length > 0;
+  const hasMessages = () => props.messages.length > 0;
 
   return (
     <div
@@ -39,16 +36,20 @@ export function MessageList(props: MessageListProps): JSX.Element {
         hasMessages() ? 'animate-fade-in' : '',
       ].join(' ')}
     >
-      <For each={filteredMessages()}>
+      <For each={props.messages}>
         {(message) => (
           <MessageListItem
             message={message}
             tags={props.tagsMap.get(message.id) ?? []}
-            attachmentCount={props.attachmentCounts.get(message.id)}
+            attachmentCount={props.attachmentCounts.get(message.id) ?? message.attachment_count}
             active={message.id === props.activeMessageId}
             returnTo={props.returnTo}
             onMoveToMailbox={props.onMoveToMailbox}
             onDelete={props.onDelete}
+            onUpdateState={props.onUpdateState}
+            trashView={props.trashView}
+            selected={props.selectedIds?.has(message.id)}
+            onSelectedChange={props.onSelectedChange}
             actionsDisabled={props.actionsDisabled}
           />
         )}

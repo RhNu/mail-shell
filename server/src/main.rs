@@ -37,6 +37,11 @@ async fn main() {
             .await
             .expect("failed to initialize database"),
     );
+    match mail_shell_server::services::trash::purge_expired(&*repo).await {
+        Ok(count) if count > 0 => info!(count, "purged expired trash during startup"),
+        Ok(_) => {}
+        Err(error) => tracing::warn!(%error, "failed to purge expired trash during startup"),
+    }
 
     let notifier: Arc<dyn Notifier> = match env::var("MAIL_SHELL_NOTIFIER")
         .unwrap_or_else(|_| "disabled".into())
@@ -83,6 +88,7 @@ async fn main() {
         inbound_service,
         notifier,
     };
+    mail_shell_server::services::trash::spawn_daily_cleanup(state.repo.clone());
 
     let assets_dir = PathBuf::from("client/dist");
     let serve_dir = ServeDir::new(assets_dir).append_index_html_on_directories(true);

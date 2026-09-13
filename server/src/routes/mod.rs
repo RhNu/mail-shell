@@ -11,6 +11,7 @@ use crate::services::notifier::Notifier;
 
 pub mod api_docs;
 pub mod attachments;
+pub mod facets;
 pub mod health;
 pub mod inbound;
 pub mod messages;
@@ -38,6 +39,10 @@ pub fn router(state: AppState) -> Router {
         .route("/api/inbound", post(inbound::handler))
         .route("/api/messages", get(messages::list))
         .route(
+            "/api/messages/bulk-state",
+            patch(messages::update_bulk_state),
+        )
+        .route(
             "/api/messages/{id}",
             get(messages::detail).delete(messages::delete),
         )
@@ -45,9 +50,12 @@ pub fn router(state: AppState) -> Router {
             "/api/messages/{id}/mailbox",
             patch(messages::update_mailbox),
         )
+        .route("/api/messages/{id}/state", patch(messages::update_state))
         .route("/api/messages/{id}/raw", get(messages::raw_download))
         .route("/api/messages/{id}/headers", get(messages::headers))
         .route("/api/attachments/{id}", get(attachments::download))
         .route("/api/tags", get(tags::list))
+        .route("/api/facets", get(facets::list))
+        .route("/api/trash", axum::routing::delete(messages::empty_trash))
         .with_state(state)
 }

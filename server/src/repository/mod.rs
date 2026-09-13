@@ -2,8 +2,8 @@ use async_trait::async_trait;
 
 use crate::mime_parser::ParsedMailSnapshotV1;
 use crate::models::{
-    AttachmentDownloadMeta, AttachmentMeta, HeaderEntry, Mailbox, MessageDetail, MessageRawMeta,
-    MessageSummary, Tag,
+    AttachmentDownloadMeta, AttachmentMeta, FacetValue, HeaderEntry, Mailbox, MessageDetail,
+    MessageRawMeta, MessageStateUpdateRequest, MessageSummary, Tag,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -26,6 +26,10 @@ pub enum RepositoryError {
 pub struct ListMessagesQuery {
     pub tag_id: Option<i64>,
     pub mailbox: Mailbox,
+    pub search: Option<String>,
+    pub read: Option<bool>,
+    pub starred: Option<bool>,
+    pub trashed: bool,
     pub limit: i64,
     pub offset: i64,
 }
@@ -77,6 +81,7 @@ pub struct InboundMessageRecord {
     pub envelope_to: String,
     pub date: Option<String>,
     pub raw_path: String,
+    pub ingest_fingerprint: Option<String>,
     pub snapshot: ParsedMailSnapshotV1,
     pub attachments: Vec<InboundAttachmentRecord>,
     pub tags: Vec<InboundTagRecord>,
@@ -84,6 +89,11 @@ pub struct InboundMessageRecord {
 
 #[async_trait]
 pub trait Repository: Send + Sync {
+    async fn find_message_by_fingerprint(
+        &self,
+        fingerprint: &str,
+    ) -> Result<Option<String>, RepositoryError>;
+
     async fn ingest_message(&self, record: InboundMessageRecord) -> Result<(), RepositoryError>;
 
     async fn list_messages(
@@ -99,10 +109,21 @@ pub trait Repository: Send + Sync {
         mailbox: Mailbox,
     ) -> Result<bool, RepositoryError>;
 
+    async fn update_message_state(
+        &self,
+        ids: &[String],
+        state: &MessageStateUpdateRequest,
+    ) -> Result<u64, RepositoryError>;
+
     async fn delete_message(
         &self,
         id: &str,
     ) -> Result<Option<DeletedMessageFiles>, RepositoryError>;
+
+    async fn list_trashed_before(
+        &self,
+        cutoff: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> Result<Vec<String>, RepositoryError>;
 
     async fn get_message_headers(
         &self,
@@ -117,6 +138,8 @@ pub trait Repository: Send + Sync {
     async fn get_message_raw(&self, id: &str) -> Result<Option<MessageRawMeta>, RepositoryError>;
 
     async fn list_tags(&self) -> Result<Vec<Tag>, RepositoryError>;
+
+    async fn list_facets(&self, kind: Option<&str>) -> Result<Vec<FacetValue>, RepositoryError>;
 }
 
 pub mod sqlx;

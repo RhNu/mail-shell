@@ -78,6 +78,9 @@ pub struct MessageSummary {
     pub date: Option<String>,
     pub message_id: Option<String>,
     pub mailbox: Mailbox,
+    pub is_read: bool,
+    pub is_starred: bool,
+    pub attachment_count: i64,
     pub created_at: DateTime<Utc>,
 }
 
@@ -96,6 +99,9 @@ pub struct MessageDetail {
     pub date: Option<String>,
     pub message_id: Option<String>,
     pub mailbox: Mailbox,
+    pub is_read: bool,
+    pub is_starred: bool,
+    pub trashed_at: Option<DateTime<Utc>>,
     pub body_text: Option<String>,
     pub body_html: Option<String>,
     pub created_at: DateTime<Utc>,
@@ -173,4 +179,27 @@ pub struct MessageHeadersResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct MailboxUpdateRequest {
     pub mailbox: Mailbox,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
+pub struct MessageStateUpdateRequest {
+    pub mailbox: Option<Mailbox>,
+    pub read: Option<bool>,
+    pub starred: Option<bool>,
+    pub trashed: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct BulkMessageStateUpdateRequest {
+    pub ids: Vec<String>,
+    #[serde(flatten)]
+    pub state: MessageStateUpdateRequest,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct FacetValue {
+    pub kind: String,
+    pub value: String,
+    pub label: String,
+    pub message_count: i64,
 }

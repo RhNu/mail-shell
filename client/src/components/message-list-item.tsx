@@ -1,6 +1,6 @@
 import { For } from 'solid-js';
 import type { JSX } from 'solid-js';
-import { Paperclip } from 'lucide-solid';
+import { Paperclip, Star } from 'lucide-solid';
 import type { Mailbox, MessageSummary } from '../features/messages/models';
 import type { Tag } from '../features/tags/api';
 import { TagChip } from './ui/tag-chip';
@@ -18,6 +18,16 @@ export type MessageListItemProps = {
   onMoveToMailbox?: (_id: string, _mailbox: Mailbox) => void;
   // eslint-disable-next-line no-unused-vars
   onDelete?: (_id: string) => void;
+  onUpdateState?: (
+    // eslint-disable-next-line no-unused-vars
+    _id: string,
+    // eslint-disable-next-line no-unused-vars
+    _state: { read?: boolean; starred?: boolean; trashed?: boolean },
+  ) => void;
+  trashView?: boolean;
+  selected?: boolean;
+  // eslint-disable-next-line no-unused-vars
+  onSelectedChange?: (_id: string, _selected: boolean) => void;
   actionsDisabled?: boolean;
 };
 
@@ -89,6 +99,28 @@ function MessageListItemActions(props: MessageListItemProps) {
           : undefined
       }
       onDelete={props.onDelete ? () => props.onDelete?.(props.message.id) : undefined}
+      onTrash={
+        !props.trashView && props.onUpdateState
+          ? () => props.onUpdateState?.(props.message.id, { trashed: true })
+          : undefined
+      }
+      onRestore={
+        props.trashView && props.onUpdateState
+          ? () => props.onUpdateState?.(props.message.id, { trashed: false })
+          : undefined
+      }
+      onSetRead={
+        props.onUpdateState
+          ? (read) => props.onUpdateState?.(props.message.id, { read })
+          : undefined
+      }
+      onSetStarred={
+        props.onUpdateState
+          ? (starred) => props.onUpdateState?.(props.message.id, { starred })
+          : undefined
+      }
+      isRead={props.message.is_read}
+      isStarred={props.message.is_starred}
       disabled={props.actionsDisabled}
     />
   );
@@ -106,6 +138,23 @@ export function MessageListItem(props: MessageListItemProps): JSX.Element {
     >
       {props.active && (
         <span class="absolute top-0 bottom-0 left-0 w-0.5 bg-zinc-900 dark:bg-zinc-100" />
+      )}
+      {props.onSelectedChange && (
+        <input
+          type="checkbox"
+          checked={props.selected}
+          onChange={(event) =>
+            props.onSelectedChange?.(props.message.id, event.currentTarget.checked)
+          }
+          aria-label={`选择 ${props.message.subject || '无主题邮件'}`}
+          class="h-4 w-4 shrink-0 accent-zinc-900"
+        />
+      )}
+      {!props.message.is_read && (
+        <span class="h-2 w-2 shrink-0 rounded-full bg-blue-600" aria-label="未读" />
+      )}
+      {props.message.is_starred && (
+        <Star size={15} class="shrink-0 fill-current" aria-label="星标" />
       )}
       <MessageListItemLink
         message={props.message}

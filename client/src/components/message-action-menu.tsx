@@ -5,6 +5,7 @@ import { Portal } from 'solid-js/web';
 import { Archive, ArchiveRestore, Ellipsis, FileDown, FileText, Trash2 } from 'lucide-solid';
 import { rawMessageDownloadUrl } from '../features/messages/api';
 import type { Mailbox } from '../features/messages/models';
+import { MessageStateMenuItems } from './message-state-menu-items';
 
 export type MessageActionMenuProps = {
   messageId: string;
@@ -13,6 +14,14 @@ export type MessageActionMenuProps = {
   // eslint-disable-next-line no-unused-vars
   onMoveToMailbox?: (_mailbox: Mailbox) => void;
   onDelete?: () => void;
+  onTrash?: () => void;
+  onRestore?: () => void;
+  // eslint-disable-next-line no-unused-vars
+  onSetRead?: (read: boolean) => void;
+  // eslint-disable-next-line no-unused-vars
+  onSetStarred?: (starred: boolean) => void;
+  isRead?: boolean;
+  isStarred?: boolean;
   disabled?: boolean;
 };
 
@@ -111,6 +120,15 @@ function MessageActionMenuContent(
 ) {
   return (
     <ArkMenu.Content class="min-w-[160px] rounded-sm border border-zinc-200 bg-zinc-50 py-1 shadow-lg dark:border-zinc-800 dark:bg-zinc-950">
+      <MessageStateMenuItems
+        isRead={props.isRead}
+        isStarred={props.isStarred}
+        showRead={Boolean(props.onSetRead)}
+        showStarred={Boolean(props.onSetStarred)}
+        showTrash={Boolean(props.onTrash)}
+        showRestore={Boolean(props.onRestore)}
+        onSelect={props.onSelectAction}
+      />
       {props.onMoveToMailbox && (
         <MoveMailboxItem
           mailbox={props.mailbox}
@@ -136,6 +154,22 @@ function handleMenuSelect(
 ) {
   if (value === 'move-mailbox') {
     props.onMoveToMailbox?.(props.mailbox === 'archive' ? 'inbox' : 'archive');
+    return;
+  }
+  if (value === 'toggle-read') {
+    props.onSetRead?.(!props.isRead);
+    return;
+  }
+  if (value === 'toggle-star') {
+    props.onSetStarred?.(!props.isStarred);
+    return;
+  }
+  if (value === 'trash') {
+    props.onTrash?.();
+    return;
+  }
+  if (value === 'restore') {
+    props.onRestore?.();
     return;
   }
 

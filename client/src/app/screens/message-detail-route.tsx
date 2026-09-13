@@ -4,8 +4,6 @@ import { ArrowLeft, Calendar, User } from 'lucide-solid';
 import { useMessageDetail } from '../../features/messages/queries';
 import { ErrorBanner, EmptyState, Skeleton } from '../../components/ui';
 import { AttachmentList } from '../../components/attachment-list';
-import { MessageActionMenu } from '../../components/message-action-menu';
-import { RawHeadersDialog } from '../../components/raw-headers-dialog';
 import { sanitizeEmailHtml } from '../../lib/html-sanitize';
 import {
   backLabel,
@@ -13,6 +11,8 @@ import {
   useDetailReturn,
   type Mailbox,
 } from './message-detail-actions';
+import { MessageDetailMenu } from './message-detail-menu';
+import { MessageHeadersDialogMount } from './message-headers-dialog-mount';
 
 function MessageMeta(props: { from: string; to: string; createdAt: string }) {
   return (
@@ -96,6 +96,17 @@ function RemoteResourcesNotice(props: { onLoadRemoteResources: () => void }) {
   );
 }
 
+function MessageSubject(props: { subject?: string | null }) {
+  return (
+    <h1
+      id="message-detail-heading"
+      class="text-xl font-semibold text-zinc-900 break-words dark:text-zinc-100"
+    >
+      {props.subject ?? '（无主题）'}
+    </h1>
+  );
+}
+
 function MessageLoadedState(props: {
   query: ReturnType<typeof useMessageDetail>;
   html: string;
@@ -105,25 +116,26 @@ function MessageLoadedState(props: {
   onViewHeaders: () => void;
   // eslint-disable-next-line no-unused-vars
   onMoveToMailbox: (_mailbox: Mailbox) => void;
-  onDelete: () => void;
+  onDelete?: () => void;
+  // eslint-disable-next-line no-unused-vars
+  onUpdateState: (state: { read?: boolean; starred?: boolean; trashed?: boolean }) => void;
   actionsDisabled: boolean;
 }) {
   return (
     <>
       <div class="flex flex-col gap-4">
         <div class="flex items-start justify-between gap-3">
-          <h1
-            id="message-detail-heading"
-            class="text-xl font-semibold text-zinc-900 break-words dark:text-zinc-100"
-          >
-            {props.query.data!.subject ?? '（无主题）'}
-          </h1>
-          <MessageActionMenu
-            messageId={props.query.data!.id}
+          <MessageSubject subject={props.query.data!.subject} />
+          <MessageDetailMenu
+            id={props.query.data!.id}
             mailbox={props.query.data!.mailbox}
             onViewHeaders={props.onViewHeaders}
             onMoveToMailbox={props.onMoveToMailbox}
             onDelete={props.onDelete}
+            trashed={Boolean(props.query.data!.trashed_at)}
+            onUpdateState={props.onUpdateState}
+            isRead={props.query.data!.is_read}
+            isStarred={props.query.data!.is_starred}
             disabled={props.actionsDisabled}
           />
         </div>
@@ -154,7 +166,9 @@ function MessageDetailContent(props: {
   onViewHeaders: () => void;
   // eslint-disable-next-line no-unused-vars
   onMoveToMailbox: (_mailbox: Mailbox) => void;
-  onDelete: () => void;
+  onDelete?: () => void;
+  // eslint-disable-next-line no-unused-vars
+  onUpdateState: (state: { read?: boolean; starred?: boolean; trashed?: boolean }) => void;
   actionsDisabled: boolean;
 }) {
   return (
@@ -171,6 +185,7 @@ function MessageDetailContent(props: {
           onViewHeaders={props.onViewHeaders}
           onMoveToMailbox={props.onMoveToMailbox}
           onDelete={props.onDelete}
+          onUpdateState={props.onUpdateState}
           actionsDisabled={props.actionsDisabled}
         />
       ) : props.notFound ? (
@@ -207,20 +222,14 @@ function MessageDetailError(props: {
   );
 }
 
-function MessageHeadersDialogMount(props: {
-  query: ReturnType<typeof useMessageDetail>;
-  open: boolean;
-  onClose: () => void;
-}) {
-  return (
-    <Show when={props.query.data}>
-      <RawHeadersDialog
-        messageId={props.query.data!.id}
-        open={props.open}
-        onClose={props.onClose}
-      />
-    </Show>
-  );
+function useAutoMarkRead(query: ReturnType<typeof useMessageDetail>, markRead: () => void) {
+  createEffect(() => {
+    if (query.data && !query.data.is_read && !query.data.trashed_at) markRead();
+  });
+}
+
+function useResetOnMessageChange(messageId: () => string, reset: () => void) {
+  createEffect(on(messageId, reset));
 }
 
 export function MessageDetailRoute() {
@@ -237,15 +246,13 @@ export function MessageDetailRoute() {
   );
   const bodyText = () => query.data?.body_text;
   const isNotFound = () => query.isError && hasHttpStatus(query.error, 404);
-
-  createEffect(
-    on(
-      () => params.messageId,
-      () => {
-        setAllowRemoteResources(false);
-        setShowHeadersDialog(false);
-      },
-    ),
+  useAutoMarkRead(query, () => actions.updateState({ read: true }));
+  useResetOnMessageChange(
+    () => params.messageId,
+    () => {
+      setAllowRemoteResources(false);
+      setShowHeadersDialog(false);
+    },
   );
 
   return (
@@ -262,7 +269,8 @@ export function MessageDetailRoute() {
         onLoadRemoteResources={() => setAllowRemoteResources(true)}
         onViewHeaders={() => setShowHeadersDialog(true)}
         onMoveToMailbox={actions.moveToMailbox}
-        onDelete={actions.deleteMessage}
+        onDelete={query.data?.trashed_at ? actions.deleteMessage : undefined}
+        onUpdateState={(state) => actions.updateState(state, Boolean(state.trashed))}
         actionsDisabled={actions.isPending()}
       />
       <MessageHeadersDialogMount

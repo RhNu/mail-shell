@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use sqlx::{
-    SqlitePool,
+    QueryBuilder, Sqlite, SqlitePool, Transaction,
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
 };
 use std::path::Path;
@@ -37,6 +37,9 @@ struct StoredMessage {
     envelope_to: String,
     date: Option<String>,
     mailbox: Mailbox,
+    read_at: Option<DateTime<Utc>>,
+    is_starred: bool,
+    trashed_at: Option<DateTime<Utc>>,
     snapshot_version: i64,
     parsed_snapshot: String,
     created_at: DateTime<Utc>,
@@ -57,12 +60,19 @@ impl SqlxRepository {
     #[tracing::instrument]
     pub async fn init_pool(data_dir: &Path) -> Result<Self, sqlx::Error> {
         let db_path = data_dir.join(DB_FILENAME);
+        let backup_path = data_dir.join("index.pre-v3.sqlite");
+        if db_path.exists() && !backup_path.exists() {
+            std::fs::copy(&db_path, &backup_path).map_err(sqlx::Error::Io)?;
+            tracing::info!(path = %backup_path.display(), "created pre-v3 database backup");
+        }
         let options = SqliteConnectOptions::new()
             .filename(&db_path)
             .create_if_missing(true);
         let pool = SqlitePoolOptions::new().connect_with(options).await?;
         Self::migrate(&pool).await?;
-        Ok(Self::new(pool))
+        let repo = Self::new(pool);
+        repo.rebuild_derived_indexes().await?;
+        Ok(repo)
     }
 
     #[tracing::instrument]
@@ -75,12 +85,63 @@ impl SqlxRepository {
             .connect_with(options)
             .await?;
         Self::migrate(&pool).await?;
-        Ok(Self::new(pool))
+        let repo = Self::new(pool);
+        repo.rebuild_derived_indexes().await?;
+        Ok(repo)
     }
 
     #[tracing::instrument(skip(pool))]
     async fn migrate(pool: &SqlitePool) -> Result<(), sqlx::Error> {
         MIGRATOR.run(pool).await?;
+        Ok(())
+    }
+
+    async fn rebuild_derived_indexes(&self) -> Result<(), sqlx::Error> {
+        let version: Option<String> = sqlx::query_scalar(
+            "SELECT value FROM app_metadata WHERE key = 'derived_index_version'",
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        if version.as_deref() == Some("1") {
+            return Ok(());
+        }
+
+        let rows = sqlx::query_as::<_, StoredSnapshot>(
+            "SELECT id, snapshot_version, parsed_snapshot FROM messages ORDER BY created_at, id",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        let envelopes: Vec<(String, String)> =
+            sqlx::query_as("SELECT id, envelope_to FROM messages ORDER BY created_at, id")
+                .fetch_all(&self.pool)
+                .await?;
+        let envelope_by_id = envelopes
+            .into_iter()
+            .collect::<std::collections::HashMap<_, _>>();
+        let mut tx = self.pool.begin().await?;
+        sqlx::query("DELETE FROM message_addresses")
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM message_fts")
+            .execute(&mut *tx)
+            .await?;
+        for row in rows {
+            let snapshot =
+                Self::decode_snapshot(&row.id, row.snapshot_version, &row.parsed_snapshot)
+                    .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
+            let envelope = envelope_by_id
+                .get(&row.id)
+                .map(String::as_str)
+                .unwrap_or_default();
+            insert_snapshot_values(&mut tx, &row.id, envelope, &snapshot).await?;
+        }
+        sqlx::query(
+            "INSERT INTO app_metadata(key, value) VALUES ('derived_index_version', '1')
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        )
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
         Ok(())
     }
 
@@ -124,6 +185,18 @@ impl SqlxRepository {
 
 #[async_trait]
 impl Repository for SqlxRepository {
+    async fn find_message_by_fingerprint(
+        &self,
+        fingerprint: &str,
+    ) -> Result<Option<String>, RepositoryError> {
+        Ok(
+            sqlx::query_scalar("SELECT id FROM messages WHERE ingest_fingerprint = ?1")
+                .bind(fingerprint)
+                .fetch_optional(&self.pool)
+                .await?,
+        )
+    }
+
     #[tracing::instrument(skip(self, record), fields(message_id = %record.id))]
     async fn ingest_message(&self, record: InboundMessageRecord) -> Result<(), RepositoryError> {
         record.snapshot.validate_for_storage().map_err(|error| {
@@ -141,8 +214,8 @@ impl Repository for SqlxRepository {
         let mut tx = self.pool.begin().await?;
 
         sqlx::query(
-            "INSERT INTO messages (id, message_id, subject, from_name, from_address, to_name, to_address, envelope_to, date, raw_path, snapshot_version, parsed_snapshot)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            "INSERT INTO messages (id, message_id, subject, from_name, from_address, to_name, to_address, envelope_to, date, raw_path, ingest_fingerprint, snapshot_version, parsed_snapshot)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
         )
         .bind(&record.id)
         .bind(&record.message_id)
@@ -154,6 +227,7 @@ impl Repository for SqlxRepository {
         .bind(&record.envelope_to)
         .bind(&record.date)
         .bind(&record.raw_path)
+        .bind(&record.ingest_fingerprint)
         .bind(SNAPSHOT_VERSION)
         .bind(&parsed_snapshot)
         .execute(&mut *tx)
@@ -197,6 +271,8 @@ impl Repository for SqlxRepository {
                 .await?;
         }
 
+        insert_snapshot_indexes(&mut tx, &record).await?;
+
         tx.commit().await?;
         tracing::debug!(
             message_id = %record.id,
@@ -212,57 +288,30 @@ impl Repository for SqlxRepository {
         &self,
         query: ListMessagesQuery,
     ) -> Result<MessagePage<MessageSummary>, RepositoryError> {
-        let total = if let Some(tag_id) = query.tag_id {
-            sqlx::query_scalar(
-                "SELECT COUNT(*)
-                 FROM messages m
-                 JOIN message_tags mt ON mt.message_id = m.id
-                 WHERE mt.tag_id = ?1
-                   AND m.mailbox = ?2",
-            )
-            .bind(tag_id)
-            .bind(query.mailbox.as_str())
-            .fetch_one(&self.pool)
-            .await?
-        } else {
-            sqlx::query_scalar("SELECT COUNT(*) FROM messages WHERE mailbox = ?1")
-                .bind(query.mailbox.as_str())
-                .fetch_one(&self.pool)
-                .await?
-        };
+        let search = query.search.as_deref().and_then(fts_query);
+        let mut count = QueryBuilder::<Sqlite>::new("SELECT COUNT(DISTINCT m.id) FROM messages m");
+        append_list_joins(&mut count, query.tag_id, search.as_deref());
+        append_list_filters(&mut count, &query, search.as_deref());
+        let total: i64 = count.build_query_scalar().fetch_one(&self.pool).await?;
 
-        let items = if let Some(tag_id) = query.tag_id {
-            sqlx::query_as::<_, MessageSummary>(
-                "SELECT m.id, m.from_name, m.from_address, m.to_name, m.to_address,
-                        m.envelope_to, m.subject, m.date, m.message_id, m.mailbox, m.created_at
-                 FROM messages m
-                 JOIN message_tags mt ON mt.message_id = m.id
-                 WHERE mt.tag_id = ?1
-                   AND m.mailbox = ?2
-                 ORDER BY m.created_at DESC, m.id DESC
-                 LIMIT ?3 OFFSET ?4",
-            )
-            .bind(tag_id)
-            .bind(query.mailbox.as_str())
-            .bind(query.limit)
-            .bind(query.offset)
+        let mut items = QueryBuilder::<Sqlite>::new(
+            "SELECT DISTINCT m.id, m.from_name, m.from_address, m.to_name, m.to_address, \
+             m.envelope_to, m.subject, m.date, m.message_id, m.mailbox, \
+             (m.read_at IS NOT NULL) AS is_read, m.is_starred, \
+             (SELECT COUNT(*) FROM attachments a WHERE a.message_id = m.id) AS attachment_count, \
+             m.created_at FROM messages m",
+        );
+        append_list_joins(&mut items, query.tag_id, search.as_deref());
+        append_list_filters(&mut items, &query, search.as_deref());
+        items
+            .push(" ORDER BY m.created_at DESC, m.id DESC LIMIT ")
+            .push_bind(query.limit)
+            .push(" OFFSET ")
+            .push_bind(query.offset);
+        let items = items
+            .build_query_as::<MessageSummary>()
             .fetch_all(&self.pool)
-            .await?
-        } else {
-            sqlx::query_as::<_, MessageSummary>(
-                "SELECT id, from_name, from_address, to_name, to_address,
-                        envelope_to, subject, date, message_id, mailbox, created_at
-                 FROM messages
-                 WHERE mailbox = ?1
-                 ORDER BY created_at DESC, id DESC
-                 LIMIT ?2 OFFSET ?3",
-            )
-            .bind(query.mailbox.as_str())
-            .bind(query.limit)
-            .bind(query.offset)
-            .fetch_all(&self.pool)
-            .await?
-        };
+            .await?;
 
         tracing::debug!(
             total,
@@ -280,7 +329,8 @@ impl Repository for SqlxRepository {
     async fn get_message(&self, id: &str) -> Result<Option<MessageRecord>, RepositoryError> {
         let stored = sqlx::query_as::<_, StoredMessage>(
             "SELECT id, message_id, subject, from_name, from_address, to_name, to_address,
-                    envelope_to, date, mailbox, snapshot_version, parsed_snapshot, created_at
+                    envelope_to, date, mailbox, read_at, is_starred, trashed_at,
+                    snapshot_version, parsed_snapshot, created_at
              FROM messages
              WHERE id = ?1",
         )
@@ -307,6 +357,9 @@ impl Repository for SqlxRepository {
             date: stored.date,
             message_id: stored.message_id,
             mailbox: stored.mailbox,
+            is_read: stored.read_at.is_some(),
+            is_starred: stored.is_starred,
+            trashed_at: stored.trashed_at,
             body_text: snapshot.primary_body_text,
             body_html: snapshot.primary_body_html,
             created_at: stored.created_at,
@@ -346,6 +399,57 @@ impl Repository for SqlxRepository {
         Ok(updated)
     }
 
+    async fn update_message_state(
+        &self,
+        ids: &[String],
+        state: &crate::models::MessageStateUpdateRequest,
+    ) -> Result<u64, RepositoryError> {
+        if ids.is_empty() {
+            return Ok(0);
+        }
+        let mut query = QueryBuilder::<Sqlite>::new("UPDATE messages SET ");
+        let mut separated = query.separated(", ");
+        if let Some(mailbox) = state.mailbox {
+            separated
+                .push("mailbox = ")
+                .push_bind_unseparated(mailbox.as_str());
+        }
+        if let Some(read) = state.read {
+            if read {
+                separated.push("read_at = COALESCE(read_at, CURRENT_TIMESTAMP)");
+            } else {
+                separated.push("read_at = NULL");
+            }
+        }
+        if let Some(starred) = state.starred {
+            separated
+                .push("is_starred = ")
+                .push_bind_unseparated(starred);
+        }
+        if let Some(trashed) = state.trashed {
+            if trashed {
+                separated.push("trashed_at = COALESCE(trashed_at, CURRENT_TIMESTAMP)");
+            } else {
+                separated.push("trashed_at = NULL");
+            }
+        }
+        if state.mailbox.is_none()
+            && state.read.is_none()
+            && state.starred.is_none()
+            && state.trashed.is_none()
+        {
+            return Ok(0);
+        }
+        drop(separated);
+        query.push(" WHERE id IN (");
+        let mut ids_builder = query.separated(", ");
+        for id in ids {
+            ids_builder.push_bind(id);
+        }
+        ids_builder.push_unseparated(")");
+        Ok(query.build().execute(&self.pool).await?.rows_affected())
+    }
+
     #[tracing::instrument(skip(self))]
     async fn delete_message(
         &self,
@@ -381,6 +485,10 @@ impl Repository for SqlxRepository {
             .bind(id)
             .execute(&mut *tx)
             .await?;
+        sqlx::query("DELETE FROM message_fts WHERE message_id = ?1")
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
 
         tx.commit().await?;
         tracing::debug!(
@@ -392,6 +500,25 @@ impl Repository for SqlxRepository {
             raw_path,
             attachment_paths,
         }))
+    }
+
+    async fn list_trashed_before(
+        &self,
+        cutoff: Option<DateTime<Utc>>,
+    ) -> Result<Vec<String>, RepositoryError> {
+        let ids = if let Some(cutoff) = cutoff {
+            sqlx::query_scalar(
+                "SELECT id FROM messages WHERE trashed_at IS NOT NULL AND trashed_at <= ?1",
+            )
+            .bind(cutoff)
+            .fetch_all(&self.pool)
+            .await?
+        } else {
+            sqlx::query_scalar("SELECT id FROM messages WHERE trashed_at IS NOT NULL")
+                .fetch_all(&self.pool)
+                .await?
+        };
+        Ok(ids)
     }
 
     #[tracing::instrument(skip(self))]
@@ -465,6 +592,7 @@ impl Repository for SqlxRepository {
             LEFT JOIN message_tags mt ON mt.tag_id = t.id
             LEFT JOIN messages m ON m.id = mt.message_id AND m.mailbox = ?1
             GROUP BY t.id
+            HAVING COUNT(m.id) > 0
             ORDER BY t.kind, t.value
             "#,
         )
@@ -474,6 +602,195 @@ impl Repository for SqlxRepository {
         tracing::debug!(tag_count = tags.len(), "listed tags");
         Ok(tags)
     }
+
+    async fn list_facets(
+        &self,
+        kind: Option<&str>,
+    ) -> Result<Vec<crate::models::FacetValue>, RepositoryError> {
+        let role = match kind.unwrap_or("recipient") {
+            "sender" => "from",
+            "recipient" => "envelope_to",
+            "domain" => "domain",
+            _ => "envelope_to",
+        };
+        let rows = if role == "domain" {
+            sqlx::query_as::<_, FacetRow>(
+                "SELECT 'domain' AS kind, ma.domain AS value, ma.domain AS label, COUNT(DISTINCT m.id) AS message_count
+                 FROM message_addresses ma JOIN messages m ON m.id = ma.message_id
+                 WHERE m.trashed_at IS NULL AND ma.domain IS NOT NULL
+                 GROUP BY ma.domain ORDER BY message_count DESC, value LIMIT 200",
+            ).fetch_all(&self.pool).await?
+        } else {
+            sqlx::query_as::<_, FacetRow>(
+                "SELECT ?1 AS kind, ma.address AS value, COALESCE(ma.name, ma.address) AS label, COUNT(DISTINCT m.id) AS message_count
+                 FROM message_addresses ma JOIN messages m ON m.id = ma.message_id
+                 WHERE m.trashed_at IS NULL AND ma.role = ?2
+                 GROUP BY ma.address ORDER BY message_count DESC, value LIMIT 200",
+            ).bind(kind.unwrap_or("recipient")).bind(role).fetch_all(&self.pool).await?
+        };
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+}
+
+#[derive(sqlx::FromRow)]
+struct FacetRow {
+    kind: String,
+    value: String,
+    label: String,
+    message_count: i64,
+}
+
+impl From<FacetRow> for crate::models::FacetValue {
+    fn from(value: FacetRow) -> Self {
+        Self {
+            kind: value.kind,
+            value: value.value,
+            label: value.label,
+            message_count: value.message_count,
+        }
+    }
+}
+
+fn fts_query(value: &str) -> Option<String> {
+    let terms = value
+        .split_whitespace()
+        .filter(|term| !term.is_empty())
+        .map(|term| format!("\"{}\"*", term.replace('"', "\"\"")))
+        .collect::<Vec<_>>();
+    (!terms.is_empty()).then(|| terms.join(" AND "))
+}
+
+fn append_list_joins(
+    builder: &mut QueryBuilder<'_, Sqlite>,
+    tag_id: Option<i64>,
+    search: Option<&str>,
+) {
+    if tag_id.is_some() {
+        builder.push(" JOIN message_tags mt ON mt.message_id = m.id");
+    }
+    if search.is_some() {
+        builder.push(" JOIN message_fts ON message_fts.message_id = m.id");
+    }
+}
+
+fn append_list_filters<'a>(
+    builder: &mut QueryBuilder<'a, Sqlite>,
+    query: &'a ListMessagesQuery,
+    search: Option<&'a str>,
+) {
+    if query.trashed {
+        builder.push(" WHERE m.trashed_at IS NOT NULL");
+    } else {
+        builder
+            .push(" WHERE m.mailbox = ")
+            .push_bind(query.mailbox.as_str())
+            .push(" AND m.trashed_at IS NULL");
+    }
+    if let Some(read) = query.read {
+        if read {
+            builder.push(" AND m.read_at IS NOT NULL");
+        } else {
+            builder.push(" AND m.read_at IS NULL");
+        }
+    }
+    if let Some(starred) = query.starred {
+        builder.push(" AND m.is_starred = ").push_bind(starred);
+    }
+    if let Some(tag_id) = query.tag_id {
+        builder.push(" AND mt.tag_id = ").push_bind(tag_id);
+    }
+    if let Some(search) = search {
+        builder.push(" AND message_fts MATCH ").push_bind(search);
+    }
+}
+
+async fn insert_snapshot_indexes(
+    tx: &mut Transaction<'_, Sqlite>,
+    record: &InboundMessageRecord,
+) -> Result<(), sqlx::Error> {
+    insert_snapshot_values(tx, &record.id, &record.envelope_to, &record.snapshot).await
+}
+
+async fn insert_snapshot_values(
+    tx: &mut Transaction<'_, Sqlite>,
+    message_id: &str,
+    envelope_to: &str,
+    snapshot: &ParsedMailSnapshotV1,
+) -> Result<(), sqlx::Error> {
+    for (role, addresses) in [
+        ("from", &snapshot.from),
+        ("to", &snapshot.to),
+        ("cc", &snapshot.cc),
+        ("bcc", &snapshot.bcc),
+        ("reply_to", &snapshot.reply_to),
+        ("sender", &snapshot.sender),
+    ] {
+        for (position, address) in addresses.iter().enumerate() {
+            let normalized = address.email().trim().to_lowercase();
+            if normalized.is_empty() {
+                continue;
+            }
+            let domain = normalized.rsplit_once('@').map(|(_, domain)| domain);
+            sqlx::query(
+                "INSERT INTO message_addresses(message_id, role, position, name, address, domain)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            )
+            .bind(message_id)
+            .bind(role)
+            .bind(position as i64)
+            .bind(&address.name)
+            .bind(&normalized)
+            .bind(domain)
+            .execute(&mut **tx)
+            .await?;
+        }
+    }
+    let envelope = envelope_to.trim().to_lowercase();
+    if !envelope.is_empty() {
+        let domain = envelope.rsplit_once('@').map(|(_, domain)| domain);
+        sqlx::query(
+            "INSERT INTO message_addresses(message_id, role, position, address, domain)
+             VALUES (?1, 'envelope_to', 0, ?2, ?3)",
+        )
+        .bind(message_id)
+        .bind(&envelope)
+        .bind(domain)
+        .execute(&mut **tx)
+        .await?;
+    }
+
+    let sender = snapshot
+        .from
+        .iter()
+        .map(|address| address.display())
+        .collect::<Vec<_>>()
+        .join(" ");
+    let recipients = snapshot
+        .to
+        .iter()
+        .chain(snapshot.cc.iter())
+        .chain(snapshot.bcc.iter())
+        .map(|address| address.display())
+        .chain(std::iter::once(envelope.clone()))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let body = [
+        snapshot.body_text().unwrap_or_default(),
+        snapshot.body_html().unwrap_or_default(),
+    ]
+    .join(" ");
+    sqlx::query(
+        "INSERT INTO message_fts(message_id, subject, sender, recipients, body)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+    )
+    .bind(message_id)
+    .bind(&snapshot.subject)
+    .bind(sender)
+    .bind(recipients)
+    .bind(body)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
 }
 
 fn addresses_to_json(addresses: &[crate::mime_parser::MailAddress]) -> Option<String> {
@@ -511,6 +828,7 @@ mod tests {
             envelope_to: "to@example.com".to_string(),
             date: Some("2024-01-01T00:00:00+00:00".to_string()),
             raw_path: format!("/tmp/{id}.eml"),
+            ingest_fingerprint: None,
             snapshot: parsed.snapshot,
             attachments: vec![InboundAttachmentRecord {
                 id: attachment_id.to_string(),
@@ -574,6 +892,10 @@ mod tests {
             .list_messages(ListMessagesQuery {
                 tag_id: None,
                 mailbox: Mailbox::Inbox,
+                search: None,
+                read: None,
+                starred: None,
+                trashed: false,
                 limit: 20,
                 offset: 0,
             })
@@ -662,6 +984,10 @@ mod tests {
             .list_messages(ListMessagesQuery {
                 tag_id: None,
                 mailbox: Mailbox::Inbox,
+                search: None,
+                read: None,
+                starred: None,
+                trashed: false,
                 limit: 20,
                 offset: 0,
             })
@@ -675,6 +1001,10 @@ mod tests {
             .list_messages(ListMessagesQuery {
                 tag_id: None,
                 mailbox: Mailbox::Archive,
+                search: None,
+                read: None,
+                starred: None,
+                trashed: false,
                 limit: 20,
                 offset: 0,
             })
@@ -688,6 +1018,10 @@ mod tests {
             .list_messages(ListMessagesQuery {
                 tag_id: Some(1),
                 mailbox: Mailbox::Inbox,
+                search: None,
+                read: None,
+                starred: None,
+                trashed: false,
                 limit: 20,
                 offset: 0,
             })
@@ -740,6 +1074,10 @@ mod tests {
             .list_messages(ListMessagesQuery {
                 tag_id: None,
                 mailbox: Mailbox::Inbox,
+                search: None,
+                read: None,
+                starred: None,
+                trashed: false,
                 limit: 20,
                 offset: 0,
             })

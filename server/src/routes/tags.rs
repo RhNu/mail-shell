@@ -56,6 +56,7 @@ mod tests {
                 envelope_to: "to@example.com".to_string(),
                 date: Some("2024-01-01T00:00:00+00:00".to_string()),
                 raw_path: "/tmp/raw.msg".to_string(),
+                ingest_fingerprint: None,
                 snapshot: crate::mime_parser::parse_message(
                     b"From: from@example.com\r\nTo: to@example.com\r\nSubject: Test\r\nContent-Type: text/plain\r\n\r\nBody",
                 )

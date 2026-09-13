@@ -7,6 +7,8 @@ const messagesListHookState = vi.hoisted(() => ({
   refetch: vi.fn(),
   updateMailbox: vi.fn(),
   deleteMessage: vi.fn(),
+  updateState: vi.fn(),
+  updateStates: vi.fn(),
   updateMailboxPending: false,
   deleteMessagePending: false,
 }));
@@ -55,6 +57,18 @@ vi.mock('../features/messages/queries', () => ({
       return messagesListHookState.deleteMessagePending;
     },
   }),
+  useUpdateMessageState: () => ({
+    mutate: messagesListHookState.updateState,
+    isPending: false,
+    isError: false,
+    error: undefined,
+  }),
+  useUpdateMessagesState: () => ({
+    mutate: messagesListHookState.updateStates,
+    isPending: false,
+    isError: false,
+    error: undefined,
+  }),
 }));
 
 function buildMessage(id: string, subject: string) {
@@ -65,6 +79,9 @@ function buildMessage(id: string, subject: string) {
     to_address: 'recipient@example.com',
     envelope_to: 'recipient@example.com',
     mailbox: 'inbox',
+    is_read: true,
+    is_starred: false,
+    attachment_count: 0,
     created_at: '2026-06-05T10:30:00.000Z',
   };
 }
@@ -93,6 +110,8 @@ beforeEach(() => {
   vi.stubGlobal('scrollTo', vi.fn());
   messagesListHookState.updateMailbox.mockReset();
   messagesListHookState.deleteMessage.mockReset();
+  messagesListHookState.updateState.mockReset();
+  messagesListHookState.updateStates.mockReset();
   messagesListHookState.updateMailboxPending = false;
   messagesListHookState.deleteMessagePending = false;
 });
@@ -122,10 +141,12 @@ it('archives an inbox message from the list action menu', async () => {
   });
 });
 
-it('permanently deletes a message from the list action menu after confirmation', async () => {
+it('permanently deletes a trashed message from the list action menu after confirmation', async () => {
   const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
 
-  render(() => <InboxScreen title={<h1>Inbox</h1>} query={() => ({ mailbox: 'inbox' })} />);
+  render(() => (
+    <InboxScreen title={<h1>Trash</h1>} query={() => ({ mailbox: 'inbox', trashed: true })} />
+  ));
 
   await fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
   await selectMenuItem('永久删除');

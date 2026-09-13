@@ -2,12 +2,15 @@ import { createMutation, createQuery, useQueryClient } from '@tanstack/solid-que
 import type { Accessor } from 'solid-js';
 import {
   deleteMessage,
+  emptyTrash,
   getMessageDetail,
   getMessageHeaders,
   listMessages,
   updateMessageMailbox,
+  updateMessageState,
+  updateMessagesState,
 } from './api';
-import type { Mailbox, MessageListQuery } from './models';
+import type { Mailbox, MessageListQuery, MessageStateUpdateRequest } from './models';
 
 const messagesKeys = {
   all: ['messages'] as const,
@@ -23,6 +26,16 @@ type UpdateMessageMailboxVariables = {
 
 type DeleteMessageVariables = {
   id: string;
+};
+
+type UpdateMessageStateVariables = {
+  id: string;
+  state: MessageStateUpdateRequest;
+};
+
+type UpdateMessagesStateVariables = {
+  ids: string[];
+  state: MessageStateUpdateRequest;
 };
 
 export function useMessagesList(query: Accessor<MessageListQuery>) {
@@ -72,5 +85,29 @@ export function useDeleteMessage() {
         queryClient.invalidateQueries({ queryKey: messagesKeys.all }),
         queryClient.invalidateQueries({ queryKey: ['tags'] }),
       ]),
+  }));
+}
+
+export function useUpdateMessageState() {
+  const queryClient = useQueryClient();
+  return createMutation(() => ({
+    mutationFn: ({ id, state }: UpdateMessageStateVariables) => updateMessageState(id, state),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: messagesKeys.all }),
+  }));
+}
+
+export function useUpdateMessagesState() {
+  const queryClient = useQueryClient();
+  return createMutation(() => ({
+    mutationFn: ({ ids, state }: UpdateMessagesStateVariables) => updateMessagesState(ids, state),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: messagesKeys.all }),
+  }));
+}
+
+export function useEmptyTrash() {
+  const queryClient = useQueryClient();
+  return createMutation(() => ({
+    mutationFn: emptyTrash,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: messagesKeys.all }),
   }));
 }

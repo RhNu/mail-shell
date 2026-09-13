@@ -16,6 +16,9 @@ type MockMessageDetailQuery = {
     envelope_to: string;
     created_at: string;
     mailbox: 'inbox' | 'archive';
+    is_read: boolean;
+    is_starred: boolean;
+    trashed_at?: string | null;
     body_text: string;
     body_html: string;
     attachments: Array<{ id: string }>;
@@ -33,6 +36,7 @@ const messageDetailQueryState = vi.hoisted(() => ({
   } as MockMessageDetailQuery,
   updateMailbox: vi.fn(),
   deleteMessage: vi.fn(),
+  updateState: vi.fn(),
   updateMailboxState: {
     isPending: false,
     isError: false,
@@ -77,6 +81,12 @@ vi.mock('../../features/messages/queries', () => ({
       return messageDetailQueryState.deleteMessageState.error;
     },
   }),
+  useUpdateMessageState: () => ({
+    mutate: messageDetailQueryState.updateState,
+    isPending: false,
+    isError: false,
+    error: undefined,
+  }),
 }));
 
 function renderRoute(path = '/messages/msg-1') {
@@ -103,6 +113,9 @@ const baseMessageDetailData = {
   envelope_to: 'delivered@example.com',
   created_at: '2026-06-05T10:30:00.000Z',
   mailbox: 'inbox' as const,
+  is_read: true,
+  is_starred: false,
+  trashed_at: null,
   body_text: 'Plain fallback',
   body_html: '<p>Hello</p>',
   attachments: [],
@@ -147,6 +160,7 @@ beforeEach(() => {
   setSuccessQuery();
   messageDetailQueryState.updateMailbox.mockReset();
   messageDetailQueryState.deleteMessage.mockReset();
+  messageDetailQueryState.updateState.mockReset();
   messageDetailQueryState.updateMailboxState = {
     isPending: false,
     isError: false,
@@ -256,11 +270,12 @@ it('returns to the source route after a mailbox action succeeds', async () => {
 
 it('deletes from detail after confirmation and returns to the source route', async () => {
   const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+  messageDetailQueryState.value.data!.trashed_at = '2026-06-05T11:00:00.000Z';
   messageDetailQueryState.deleteMessage.mockImplementation((_variables, options) => {
     options.onSuccess();
   });
 
-  renderRoute('/messages/msg-1?returnTo=%2Ftags%2F7');
+  renderRoute('/messages/msg-1?returnTo=%2Ftrash');
 
   await fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
   await selectMenuItem('永久删除');
@@ -272,5 +287,5 @@ it('deletes from detail after confirmation and returns to the source route', asy
 
   expect(confirm).not.toHaveBeenCalled();
   expect(messageDetailQueryState.deleteMessage.mock.calls[0][0]).toEqual({ id: 'msg-1' });
-  await waitFor(() => expect(window.location.hash).toBe('#/tags/7'));
+  await waitFor(() => expect(window.location.hash).toBe('#/trash'));
 });

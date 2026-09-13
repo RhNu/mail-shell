@@ -1,8 +1,8 @@
-import { createSignal, type JSX } from 'solid-js';
+import { createSignal, For, type JSX } from 'solid-js';
 import { useLocation } from '@solidjs/router';
 import { Dialog } from '@ark-ui/solid/dialog';
 import { Portal } from 'solid-js/web';
-import { Archive, Menu, X, Inbox } from 'lucide-solid';
+import { Archive, Menu, X, Inbox, MailOpen, Star, Trash2 } from 'lucide-solid';
 import { ConnectivityBanner } from '../components/connectivity-banner';
 import { TagNav } from '../components/tag-nav';
 import { PwaUpdateController } from '../features/system/pwa-update-controller';
@@ -19,19 +19,28 @@ function navCls(active: boolean) {
 
 function MainNav(props: { class?: string; onNavigate?: () => void }) {
   const location = useLocation();
-  const isInboxActive = () => location.pathname === '/';
-  const isArchiveActive = () => location.pathname === '/archive';
+  const items = [
+    { href: '/', label: '收件箱', icon: Inbox },
+    { href: '/unread', label: '未读', icon: MailOpen },
+    { href: '/starred', label: '星标', icon: Star },
+    { href: '/archive', label: '归档', icon: Archive },
+    { href: '/trash', label: '垃圾箱', icon: Trash2 },
+  ];
 
   return (
     <nav aria-label="主导航" class={props.class}>
-      <a href="#/" class={navCls(isInboxActive())} onClick={() => props.onNavigate?.()}>
-        <Inbox size={18} />
-        <span>收件箱</span>
-      </a>
-      <a href="#/archive" class={navCls(isArchiveActive())} onClick={() => props.onNavigate?.()}>
-        <Archive size={18} />
-        <span>归档</span>
-      </a>
+      <For each={items}>
+        {(item) => (
+          <a
+            href={`#${item.href}`}
+            class={navCls(location.pathname === item.href)}
+            onClick={() => props.onNavigate?.()}
+          >
+            <item.icon size={18} />
+            <span>{item.label}</span>
+          </a>
+        )}
+      </For>
     </nav>
   );
 }

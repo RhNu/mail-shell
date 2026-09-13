@@ -30,22 +30,34 @@ Blob data stays out of SQLite:
 - SQLite also stores a versioned parsed-mail snapshot for each message. The snapshot preserves ordered headers and non-attachment MIME structure; attachment nodes contain metadata and attachment ids but not attachment bytes.
 - Raw MIME files are written to the server data directory for archive/download only.
 - Attachments are written to the server data directory.
-- `messages.mailbox` tracks the user-facing message area. New mail starts in `inbox`;
-  archived mail moves to `archive` and can be restored to `inbox`.
+- `messages.mailbox` tracks inbox/archive placement. Read, starred, snoozed, and trashed
+  state are independent. Trashed mail keeps its previous placement so restoring it is lossless.
+- SQLite FTS5 indexes subjects, participants, and message bodies. Structured participants are
+  stored in `message_addresses`; `+` addresses are normalized as exact addresses and are not
+  implicitly grouped.
 
 Message detail and header APIs read the persisted SQLite snapshot. They do not read or re-parse the raw `.eml` file. The raw file is only read by the raw-download endpoint.
 
-Expected logical tables:
+Core logical tables:
 
 - `messages`
 - `attachments`
 - `message_tags`
+- `message_addresses`
+- `message_fts`
 
 The current schema is intentionally destructive from earlier development versions. Existing data directories must be cleared before deploying this schema.
 
 ## Classification Model
 
-Classification is not a free-form folder tree. It is a system-tag model with attached data:
+Classification separates durable user choices from derived system dimensions:
+
+- mailbox and message state provide fixed system views
+- user labels are durable and may remain empty
+- sender, recipient, and domain facets are derived from `message_addresses` and only appear when
+  they currently contain messages
+
+The legacy ingest tag model remains available during the first upgrade stage:
 
 - each tag has `kind`
 - each tag has `value`

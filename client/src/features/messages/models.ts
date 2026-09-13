@@ -9,3 +9,5 @@ export type MessageDetailResponse = components['schemas']['MessageDetailResponse
 export type AttachmentMeta = components['schemas']['AttachmentMeta'];
 export type HeaderEntry = components['schemas']['HeaderEntry'];
 export type MessageHeadersResponse = components['schemas']['MessageHeadersResponse'];
+export type MessageStateUpdateRequest = components['schemas']['MessageStateUpdateRequest'];
+export type BulkMessageStateUpdateRequest = components['schemas']['BulkMessageStateUpdateRequest'];

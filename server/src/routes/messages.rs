@@ -8,8 +8,8 @@ use serde::Deserialize;
 
 use crate::error::AppError;
 use crate::models::{
-    ErrorResponse, Mailbox, MailboxUpdateRequest, MessageDetailResponse, MessageHeadersResponse,
-    MessageListResponse,
+    BulkMessageStateUpdateRequest, ErrorResponse, Mailbox, MailboxUpdateRequest,
+    MessageDetailResponse, MessageHeadersResponse, MessageListResponse, MessageStateUpdateRequest,
 };
 use crate::repository::ListMessagesQuery;
 use crate::routes::AppState;
@@ -20,6 +20,10 @@ pub struct ListQuery {
     limit: Option<u32>,
     tag: Option<i64>,
     mailbox: Option<Mailbox>,
+    q: Option<String>,
+    read: Option<bool>,
+    starred: Option<bool>,
+    trashed: Option<bool>,
 }
 
 #[utoipa::path(
@@ -30,7 +34,11 @@ pub struct ListQuery {
         ("page" = Option<u32>, Query, description = "1-based page number"),
         ("limit" = Option<u32>, Query, description = "Page size between 1 and 100"),
         ("tag" = Option<i64>, Query, description = "Filter by tag id"),
-        ("mailbox" = Option<Mailbox>, Query, description = "Filter by mailbox; defaults to inbox")
+        ("mailbox" = Option<Mailbox>, Query, description = "Filter by mailbox; defaults to inbox"),
+        ("q" = Option<String>, Query, description = "Full-text search"),
+        ("read" = Option<bool>, Query, description = "Filter by read state"),
+        ("starred" = Option<bool>, Query, description = "Filter by starred state"),
+        ("trashed" = Option<bool>, Query, description = "Show trashed messages")
     ),
     responses(
         (status = 200, description = "Paginated message list", body = MessageListResponse),
@@ -51,6 +59,10 @@ pub async fn list(
         .list_messages(ListMessagesQuery {
             tag_id: query.tag,
             mailbox: query.mailbox.unwrap_or_default(),
+            search: query.q.filter(|value| !value.trim().is_empty()),
+            read: query.read,
+            starred: query.starred,
+            trashed: query.trashed.unwrap_or(false),
             limit: limit as i64,
             offset,
         })
@@ -69,6 +81,60 @@ pub async fn list(
         page,
         limit,
     }))
+}
+
+#[utoipa::path(
+    patch,
+    path = "/api/messages/{id}/state",
+    operation_id = "updateMessageState",
+    params(("id" = String, Path, description = "Message id")),
+    request_body = MessageStateUpdateRequest,
+    responses(
+        (status = 204, description = "Message state updated"),
+        (status = 404, description = "Message not found", body = ErrorResponse)
+    )
+)]
+pub async fn update_state(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(request): Json<MessageStateUpdateRequest>,
+) -> Result<axum::http::StatusCode, AppError> {
+    let updated = state.repo.update_message_state(&[id], &request).await?;
+    if updated == 0 {
+        return Err(AppError::NotFound);
+    }
+    Ok(axum::http::StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(
+    patch,
+    path = "/api/messages/bulk-state",
+    operation_id = "updateMessagesState",
+    request_body = BulkMessageStateUpdateRequest,
+    responses((status = 204, description = "Message states updated"))
+)]
+pub async fn update_bulk_state(
+    State(state): State<AppState>,
+    Json(request): Json<BulkMessageStateUpdateRequest>,
+) -> Result<axum::http::StatusCode, AppError> {
+    state
+        .repo
+        .update_message_state(&request.ids, &request.state)
+        .await?;
+    Ok(axum::http::StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(
+    delete,
+    path = "/api/trash",
+    operation_id = "emptyTrash",
+    responses((status = 204, description = "Trash permanently emptied"))
+)]
+pub async fn empty_trash(
+    State(state): State<AppState>,
+) -> Result<axum::http::StatusCode, AppError> {
+    crate::services::trash::purge_all(&*state.repo).await?;
+    Ok(axum::http::StatusCode::NO_CONTENT)
 }
 
 #[utoipa::path(
@@ -304,6 +370,7 @@ mod tests {
                 envelope_to: "to@example.com".to_string(),
                 date: Some("2024-01-01T00:00:00+00:00".to_string()),
                 raw_path: format!("/tmp/{i}.eml"),
+                ingest_fingerprint: None,
                 snapshot: crate::mime_parser::parse_message(raw.as_bytes())
                     .unwrap()
                     .snapshot,
@@ -325,6 +392,10 @@ mod tests {
             limit: Some(2),
             tag: None,
             mailbox: None,
+            q: None,
+            read: None,
+            starred: None,
+            trashed: None,
         };
         let res = list(State(state), Query(query)).await.unwrap();
         assert_eq!(res.total, 5);
@@ -349,6 +420,7 @@ mod tests {
                 envelope_to: "to@example.com".to_string(),
                 date: Some("2024-01-01T00:00:00+00:00".to_string()),
                 raw_path: "/tmp/tagged.eml".to_string(),
+                ingest_fingerprint: None,
                 snapshot: crate::mime_parser::parse_message(
                     b"From: from@example.com\r\nTo: to@example.com\r\nSubject: Tagged\r\nMessage-ID: <msg-tagged>\r\nContent-Type: text/plain\r\n\r\nBody",
                 )
@@ -370,6 +442,10 @@ mod tests {
             limit: None,
             tag: Some(1),
             mailbox: None,
+            q: None,
+            read: None,
+            starred: None,
+            trashed: None,
         };
         let res = list(State(state), Query(query)).await.unwrap();
         assert_eq!(res.total, 1);

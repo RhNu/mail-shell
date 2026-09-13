@@ -25,6 +25,22 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/facets': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['listFacets'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/healthz': {
     parameters: {
       query?: never;
@@ -72,6 +88,22 @@ export interface paths {
     options?: never;
     head?: never;
     patch?: never;
+    trace?: never;
+  };
+  '/api/messages/bulk-state': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch: operations['updateMessagesState'];
     trace?: never;
   };
   '/api/messages/{id}': {
@@ -138,6 +170,22 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/messages/{id}/state': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch: operations['updateMessageState'];
+    trace?: never;
+  };
   '/api/tags': {
     parameters: {
       query?: never;
@@ -149,6 +197,22 @@ export interface paths {
     put?: never;
     post?: never;
     delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/trash': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete: operations['emptyTrash'];
     options?: never;
     head?: never;
     patch?: never;
@@ -166,8 +230,18 @@ export interface components {
       /** Format: int64 */
       size?: number | null;
     };
+    BulkMessageStateUpdateRequest: components['schemas']['MessageStateUpdateRequest'] & {
+      ids: string[];
+    };
     ErrorResponse: {
       error: string;
+    };
+    FacetValue: {
+      kind: string;
+      label: string;
+      /** Format: int64 */
+      message_count: number;
+      value: string;
     };
     HeaderEntry: {
       name: string;
@@ -206,12 +280,16 @@ export interface components {
       from_name?: string | null;
       id: string;
       in_reply_to?: string | null;
+      is_read: boolean;
+      is_starred: boolean;
       mailbox: components['schemas']['Mailbox'];
       message_id?: string | null;
       reply_to?: string | null;
       subject: string;
       to_address?: string | null;
       to_name?: string | null;
+      /** Format: date-time */
+      trashed_at?: string | null;
     };
     MessageDetailResponse: components['schemas']['MessageDetail'] & {
       attachments: components['schemas']['AttachmentMeta'][];
@@ -228,7 +306,15 @@ export interface components {
       /** Format: int64 */
       total: number;
     };
+    MessageStateUpdateRequest: {
+      mailbox?: null | components['schemas']['Mailbox'];
+      read?: boolean | null;
+      starred?: boolean | null;
+      trashed?: boolean | null;
+    };
     MessageSummary: {
+      /** Format: int64 */
+      attachment_count: number;
       /** Format: date-time */
       created_at: string;
       date?: string | null;
@@ -236,6 +322,8 @@ export interface components {
       from_address: string;
       from_name?: string | null;
       id: string;
+      is_read: boolean;
+      is_starred: boolean;
       mailbox: components['schemas']['Mailbox'];
       message_id?: string | null;
       subject: string;
@@ -298,6 +386,29 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorResponse'];
+        };
+      };
+    };
+  };
+  listFacets: {
+    parameters: {
+      query?: {
+        /** @description recipient, sender, or domain */
+        kind?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Non-empty system facets */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['FacetValue'][];
         };
       };
     };
@@ -376,6 +487,14 @@ export interface operations {
         tag?: number;
         /** @description Filter by mailbox; defaults to inbox */
         mailbox?: components['schemas']['Mailbox'];
+        /** @description Full-text search */
+        q?: string;
+        /** @description Filter by read state */
+        read?: boolean;
+        /** @description Filter by starred state */
+        starred?: boolean;
+        /** @description Show trashed messages */
+        trashed?: boolean;
       };
       header?: never;
       path?: never;
@@ -400,6 +519,28 @@ export interface operations {
         content: {
           'application/json': components['schemas']['ErrorResponse'];
         };
+      };
+    };
+  };
+  updateMessagesState: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['BulkMessageStateUpdateRequest'];
+      };
+    };
+    responses: {
+      /** @description Message states updated */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
     };
   };
@@ -608,6 +749,40 @@ export interface operations {
       };
     };
   };
+  updateMessageState: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Message id */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['MessageStateUpdateRequest'];
+      };
+    };
+    responses: {
+      /** @description Message state updated */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Message not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorResponse'];
+        };
+      };
+    };
+  };
   listTags: {
     parameters: {
       query?: never;
@@ -634,6 +809,24 @@ export interface operations {
         content: {
           'application/json': components['schemas']['ErrorResponse'];
         };
+      };
+    };
+  };
+  emptyTrash: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Trash permanently emptied */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
     };
   };

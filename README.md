@@ -165,17 +165,23 @@ Full CI details: [`docs/deployment-and-ci.md`](docs/deployment-and-ci.md).
 |---|---|---|
 | GET | `/api/healthz` | Health check |
 | POST | `/api/inbound` | Ingest raw MIME + metadata (multipart) |
-| GET | `/api/messages` | Paginated message list, optional tag and mailbox filters |
+| GET | `/api/messages` | Paginated message list with full-text and state filters |
 | GET | `/api/messages/{id}` | Full message detail + attachments |
 | PATCH | `/api/messages/{id}/mailbox` | Move a message between `inbox` and `archive` |
+| PATCH | `/api/messages/{id}/state` | Update read, starred, trash, or mailbox state |
+| PATCH | `/api/messages/bulk-state` | Update state for several messages |
 | DELETE | `/api/messages/{id}` | Permanently delete a message and its stored blobs |
+| DELETE | `/api/trash` | Permanently empty the trash |
 | GET | `/api/messages/{id}/headers` | Parsed top-level message headers from the stored snapshot |
 | GET | `/api/messages/{id}/raw` | Raw EML download |
 | GET | `/api/attachments/{id}` | Binary attachment download |
 | GET | `/api/tags` | All tags with message counts |
+| GET | `/api/facets` | Browse non-empty recipient, sender, and domain facets |
 | GET | `/api-docs/openapi.json` | OpenAPI spec |
 
-The current database schema is a destructive development schema. Clear the configured `MAIL_SHELL_DATA_DIR` before deploying this version over an older local database.
+Database migrations run before the HTTP listener starts. Existing message snapshots are backfilled
+into address and search indexes, and a one-time `index.pre-v3.sqlite` backup is created before the
+first upgraded startup.
 
 ## Documentation
 

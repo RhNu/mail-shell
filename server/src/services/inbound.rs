@@ -45,6 +45,16 @@ impl InboundMessageService {
     ) -> Result<InboundResponse, InboundServiceError> {
         storage::ensure_dirs(&self.data_dir)?;
 
+        let ingest_fingerprint = raw_fingerprint(&raw_mime);
+        if let Some(id) = self
+            .repo
+            .find_message_by_fingerprint(&ingest_fingerprint)
+            .await?
+        {
+            tracing::info!(msg_id = %id, "ignored duplicate inbound message");
+            return Ok(InboundResponse { id });
+        }
+
         let message_id = storage::generate_id();
         let mut written_paths = Vec::new();
 
@@ -106,6 +116,7 @@ impl InboundMessageService {
                 envelope_to: metadata.envelope_to,
                 date: parsed.date,
                 raw_path: raw_path.to_string_lossy().into_owned(),
+                ingest_fingerprint: Some(ingest_fingerprint),
                 snapshot: parsed.snapshot,
                 attachments,
                 tags,
@@ -146,6 +157,15 @@ impl InboundMessageService {
             }
         }
     }
+}
+
+fn raw_fingerprint(raw: &[u8]) -> String {
+    let mut hash = 0xcbf29ce484222325_u64;
+    for byte in raw {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    format!("fnv1a64:{hash:016x}:{}", raw.len())
 }
 
 fn first_address_fields(addrs: &[MailAddress]) -> (Option<String>, Option<String>) {
@@ -236,6 +256,10 @@ mod tests {
             .list_messages(ListMessagesQuery {
                 tag_id: None,
                 mailbox: Mailbox::Inbox,
+                search: None,
+                read: None,
+                starred: None,
+                trashed: false,
                 limit: 20,
                 offset: 0,
             })

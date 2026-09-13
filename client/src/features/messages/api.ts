@@ -7,6 +7,7 @@ import type {
   MessageHeadersResponse,
   MessageListQuery,
   MessageListResponse,
+  MessageStateUpdateRequest,
 } from './models';
 
 export function listMessages(query: MessageListQuery = {}): Promise<MessageListResponse> {
@@ -48,6 +49,30 @@ export function deleteMessage(id: string): Promise<void> {
       params: { path: { id } },
     }),
   );
+}
+
+export function updateMessageState(id: string, state: MessageStateUpdateRequest): Promise<void> {
+  return executeVoid(
+    apiClient.PATCH('/api/messages/{id}/state', {
+      params: { path: { id } },
+      body: state,
+    }),
+  );
+}
+
+export function updateMessagesState(
+  ids: string[],
+  state: MessageStateUpdateRequest,
+): Promise<void> {
+  return executeVoid(
+    apiClient.PATCH('/api/messages/bulk-state', {
+      body: { ids, ...state },
+    }),
+  );
+}
+
+export function emptyTrash(): Promise<void> {
+  return executeVoid(apiClient.DELETE('/api/trash'));
 }
 
 export function rawMessageDownloadUrl(id: string): string {

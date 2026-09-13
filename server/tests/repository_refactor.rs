@@ -36,6 +36,7 @@ fn sample_record(id: &str, attachment_id: &str, message_id: &str) -> InboundMess
         envelope_to: "recipient@example.com".to_string(),
         date: Some("2024-01-01T00:00:00+00:00".to_string()),
         raw_path: format!("/tmp/{id}.eml"),
+        ingest_fingerprint: None,
         snapshot: parsed.snapshot,
         attachments: vec![InboundAttachmentRecord {
             id: attachment_id.to_string(),
@@ -73,6 +74,10 @@ async fn aggregate_ingest_persists_message_graph() {
         .list_messages(ListMessagesQuery {
             tag_id: None,
             mailbox: Mailbox::Inbox,
+            search: None,
+            read: None,
+            starred: None,
+            trashed: false,
             limit: 20,
             offset: 0,
         })
@@ -106,6 +111,10 @@ async fn aggregate_ingest_rolls_back_on_duplicate_message_id() {
         .list_messages(ListMessagesQuery {
             tag_id: None,
             mailbox: Mailbox::Inbox,
+            search: None,
+            read: None,
+            starred: None,
+            trashed: false,
             limit: 20,
             offset: 0,
         })
@@ -122,7 +131,7 @@ async fn aggregate_ingest_rolls_back_on_duplicate_message_id() {
 }
 
 #[tokio::test]
-async fn inbound_service_cleans_up_files_when_repository_write_fails() {
+async fn inbound_service_deduplicates_worker_retries_without_extra_files() {
     let temp_dir = tempfile::tempdir().unwrap();
     let repo = Arc::new(SqlxRepository::init_pool_in_memory().await.unwrap());
     let service = InboundMessageService::new(
@@ -133,13 +142,16 @@ async fn inbound_service_cleans_up_files_when_repository_write_fails() {
 
     let raw = b"From: sender@example.com\r\nTo: recipient@example.com\r\nSubject: Hello\r\nMessage-ID: <test-dup-msg-id>\r\nContent-Type: multipart/mixed; boundary=\"boundary123\"\r\n\r\n--boundary123\r\nContent-Type: text/plain\r\n\r\nBody\r\n--boundary123\r\nContent-Type: text/plain\r\nContent-Disposition: attachment; filename=\"hello.txt\"\r\n\r\ntext\r\n--boundary123--";
 
-    service
+    let first = service
         .ingest(raw.to_vec(), sample_metadata())
         .await
         .unwrap();
 
-    let second = service.ingest(raw.to_vec(), sample_metadata()).await;
-    assert!(second.is_err());
+    let second = service
+        .ingest(raw.to_vec(), sample_metadata())
+        .await
+        .unwrap();
+    assert_eq!(second.id, first.id);
 
     let raw_files = std::fs::read_dir(temp_dir.path().join("raw"))
         .unwrap()
